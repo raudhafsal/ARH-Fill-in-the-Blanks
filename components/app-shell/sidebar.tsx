@@ -10,9 +10,6 @@ export function Sidebar({ items }: { items: NavItem[] }) {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
-      <div style={{ fontSize: 10, color: "#16a34a", padding: "2px 8px", background: "#f0fdf4" }}>
-        SIDEBAR BUILD v9
-      </div>
       <div className="flex h-16 items-center gap-2 border-b px-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
           ARH
