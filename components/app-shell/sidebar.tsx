@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils";
 import type { NavItem } from "@/lib/nav-config";
 
 export function Sidebar({ items }: { items: NavItem[] }) {
-  const pathname = usePathname();
+  // usePathname() can return null during certain SSR passes; guard against that
+  // instead of calling .startsWith() on it directly (that null was the real cause
+  // of the "server-side exception" crash on every authenticated page).
+  const pathname = usePathname() ?? "";
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">

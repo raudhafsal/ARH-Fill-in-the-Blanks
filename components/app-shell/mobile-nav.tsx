@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function MobileNav({ items }: { items: NavItem[] }) {
-  const pathname = usePathname();
+  // See sidebar.tsx — usePathname() can return null during certain SSR passes.
+  const pathname = usePathname() ?? "";
   const primary = items.filter((i) => i.mobilePriority).slice(0, 4);
   const rest = items.filter((i) => !primary.includes(i));
 
