@@ -1,3 +1,5 @@
+"use client";
+
 import type { Profile } from "@/types/database";
 import { navForRole } from "@/lib/nav-config";
 import { Sidebar } from "./sidebar";
