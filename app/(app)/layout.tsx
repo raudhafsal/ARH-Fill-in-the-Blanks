@@ -23,16 +23,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </pre>
     );
   }
-  // TEMPORARY DIAGNOSTIC: bypass all chrome (Sidebar/Header/MobileNav) entirely to
-  // determine whether the crash is really in AppShell or somewhere else. If this
-  // renders successfully, the bug is in AppShell's tree; if it still crashes, it's
-  // somewhere we haven't found yet (middleware, a shared lib, etc).
-  return (
-    <div style={{ padding: 24 }}>
-      <p style={{ fontSize: 12, color: "#16a34a", marginBottom: 16 }}>
-        DIAGNOSTIC — bare layout, AppShell bypassed. If you see this and the content below it, AppShell (Sidebar/Header/MobileNav) is the problem.
-      </p>
-      {children}
-    </div>
-  );
+  return <AppShell profile={profile}>{children}</AppShell>;
 }

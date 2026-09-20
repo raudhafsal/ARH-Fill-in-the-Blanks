@@ -14,9 +14,9 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
         <Sidebar items={items} />
       </DebugBoundary>
       <div className="flex min-w-0 flex-1 flex-col">
-        <DebugBoundary label="Header">
-          <Header profile={profile} />
-        </DebugBoundary>
+        {/* TEMPORARY DIAGNOSTIC: Header removed to bisect which piece of the
+            chrome is crashing. Sidebar + MobileNav still render below. */}
+        <p style={{ fontSize: 12, color: "#16a34a", padding: 8 }}>DIAGNOSTIC — Header removed.</p>
         <main className="flex-1 pb-20 md:pb-0">{children}</main>
       </div>
       <DebugBoundary label="MobileNav">
