@@ -8,6 +8,24 @@ This is an **internal POS / business management system**. It intentionally does 
 
 ---
 
+## 0. Your live Supabase backend
+
+A Supabase project has already been created and fully provisioned for this app:
+
+- **Project name**: `arh-fill-in-the-blank-pos`
+- **Project ref**: `fercnahcnikdnvbusnuv`
+- **Region**: `ap-south-1` (Mumbai — closest available region to the Maldives)
+- **URL**: `https://fercnahcnikdnvbusnuv.supabase.co`
+- Schema, RLS policies, functions/RPCs, triggers, and storage buckets from `supabase/migrations/001_initial_schema.sql` are applied, plus an additional security/performance hardening pass (`003_security_performance_hardening.sql` — tightens RPC execute grants so only signed-in staff can call them, and optimizes RLS policies for query performance).
+- Catalog was left **empty** (no demo data) — add your real categories and products from Settings/Products once you sign in.
+- `.env.local` in this project is already filled in with this project's URL and anon key — you can run `npm install && npm run dev` immediately.
+- **You still need to create your first administrator account** — see section 8 below (Supabase Dashboard → Authentication → Users → Add user). Nothing else works until that account exists.
+- When you deploy to Vercel, use the same `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` values from `.env.local` as your Vercel environment variables (see section 7).
+
+Sections 4 and 6 below describe how this was set up in case you ever need to recreate it or set up a second (e.g. staging) project.
+
+---
+
 ## 1. What's included
 
 - Email/password staff login (Supabase Auth), no public sign-up. Roles: **Administrator**, **Manager**, **Cashier**, enforced by both the UI and PostgreSQL Row Level Security (RLS) — the database is the real gatekeeper, not the frontend.
