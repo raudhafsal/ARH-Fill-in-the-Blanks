@@ -16,11 +16,13 @@ A Supabase project has already been created and fully provisioned for this app:
 - **Project ref**: `fercnahcnikdnvbusnuv`
 - **Region**: `ap-south-1` (Mumbai — closest available region to the Maldives)
 - **URL**: `https://fercnahcnikdnvbusnuv.supabase.co`
-- Schema, RLS policies, functions/RPCs, triggers, and storage buckets from `supabase/migrations/001_initial_schema.sql` are applied, plus an additional security/performance hardening pass (`003_security_performance_hardening.sql` — tightens RPC execute grants so only signed-in staff can call them, and optimizes RLS policies for query performance).
+- Schema, RLS policies, functions/RPCs, triggers, and storage buckets from `supabase/migrations/001_initial_schema.sql` are applied, plus two hardening passes: `003_security_performance_hardening.sql` (tightens RPC execute grants so only signed-in staff can call them, optimizes RLS policies for query performance) and `004_fix_role_privilege_escalation.sql` (closes a privilege-escalation gap — see the security note below).
 - Catalog was left **empty** (no demo data) — add your real categories and products from Settings/Products once you sign in.
 - `.env.local` in this project is already filled in with this project's URL and anon key — you can run `npm install && npm run dev` immediately.
-- **You still need to create your first administrator account** — see section 8 below (Supabase Dashboard → Authentication → Users → Add user). Nothing else works until that account exists.
+- **Your administrator account already exists**: email `looth@arh.mv`. Sign in at `/login` with the password you gave me when you asked me to create it (not repeated here — check your own records). Change it any time from Profile → Change password once signed in.
 - When you deploy to Vercel, use the same `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` values from `.env.local` as your Vercel environment variables (see section 7).
+
+**Important security note on staff creation**: the original design let `handle_new_user()` trust a `role` field from `raw_user_meta_data` — but that field can be set by anyone calling the public sign-up API with just the anon key, meaning a stranger could have registered themselves as `administrator`. This was fixed (migration 004) so the trigger only trusts `raw_app_meta_data`, which is never reachable from the public sign-up endpoint. One consequence: the plain Supabase Dashboard "Add user" form only sets `user_metadata`, not `app_metadata`, so it can no longer be used to set a trusted role. Use **`supabase/create_staff_user.sql`** instead (run it in the Dashboard's SQL Editor) — see section 8.
 
 Sections 4 and 6 below describe how this was set up in case you ever need to recreate it or set up a second (e.g. staging) project.
 
@@ -72,17 +74,13 @@ public/            PWA manifest, icons (placeholder "ARH" logo — replace with 
 
 ## 4. Supabase setup
 
-1. Create a project at [supabase.com](https://supabase.com/dashboard) (choose a region close to the Maldives, e.g. Singapore).
-2. Open the SQL Editor and run **`supabase/migrations/001_initial_schema.sql`** in full. This creates every table, index, constraint, function/RPC, trigger, RLS policy, and the storage buckets (`product-images`, `business-assets`, `expense-receipts`, `avatars`) with their policies.
+1. Create a project at [supabase.com](https://supabase.com/dashboard) (choose a region close to the Maldives — this project used `ap-south-1`/Mumbai).
+2. Open the SQL Editor and run, in order: **`supabase/migrations/001_initial_schema.sql`**, then `003_security_performance_hardening.sql`, then `004_fix_role_privilege_escalation.sql` (001 creates every table, index, constraint, function/RPC, trigger, RLS policy, and the storage buckets with their policies; 003 and 004 are hardening passes, described in section 0 above — apply all three, in order, on any new project).
 3. Optionally run **`supabase/migrations/002_demo_seed.sql`** to add demo categories/products for exploring the app (safe to skip — all demo rows are prefixed `(Demo)`).
-4. **Auth settings** (Authentication → URL Configuration): set the Site URL to your Vercel production URL, and add it (plus `http://localhost:3000` for local dev) to the Redirect URLs list — this is required for the "forgot password" email link to work.
+4. **Auth settings** (Authentication → URL Configuration): set the Site URL to your Vercel production URL, and add it (plus `http://localhost:3000` for local dev) to the Redirect URLs list — this is required for the "forgot password" email link to work. While there, also consider turning on **Leaked password protection** (Authentication → Policies/Providers → Password) — Supabase's security advisor flags this as off by default; it checks new passwords against HaveIBeenPwned.
 5. **Storage**: nothing else to configure — the buckets and their RLS-style storage policies were created by the migration.
-6. **Create your first administrator**: Authentication → Users → *Add user* (email + password, tick "Auto Confirm"). Open the new user, edit **Raw user meta data** to:
-   ```json
-   { "full_name": "Your Name", "role": "administrator" }
-   ```
-   A database trigger automatically creates the matching `profiles` row with that role the moment the user is created. Sign in with that account — you now have full access, including Settings, where you can review/adjust everyone else's role later.
-7. Create additional staff (managers/cashiers) the same way, using `"role": "manager"` or `"role": "cashier"` (or leave `role` out — it defaults to cashier). There is deliberately **no public registration** and no in-app account creation, because that would require exposing the Supabase service-role key to the browser, which this app never does.
+6. **Create your first administrator**: open the SQL Editor and run **`supabase/create_staff_user.sql`** after editing its `v_email` / `v_password` / `v_full_name` / `v_role` (`'administrator'`) variables at the top. This creates the Supabase Auth account directly with a securely hashed password and sets the role via `app_metadata` — the only place the `handle_new_user()` trigger trusts a role from (see the security note in section 0: the plain Dashboard "Add user" form can't do this safely, because it only sets `user_metadata`, which is reachable from the public sign-up endpoint). Sign in with that account — you now have full access, including Settings, where you can review/adjust everyone else's role later.
+7. Create additional staff (managers/cashiers) the same way — re-run `create_staff_user.sql` with different values, using `v_role := 'manager'` or `v_role := 'cashier'`. There is deliberately **no public registration** and no in-app account creation, because that would require exposing the Supabase service-role key to the browser, which this app never does.
 
 ## 5. Local development
 
@@ -130,7 +128,9 @@ No separate backend, no Firebase, nothing else to host.
 
 ## 8. Default administrator setup (quick reference)
 
-Supabase Dashboard → Authentication → Users → Add user → tick "Auto Confirm User" → after creating, edit the user and set **Raw user meta data** to `{"full_name": "Admin Name", "role": "administrator"}` → sign in at `/login` with that email/password.
+Supabase Dashboard → SQL Editor → paste **`supabase/create_staff_user.sql`** → edit the `v_email`/`v_password`/`v_full_name`/`v_role` variables at the top (`v_role := 'administrator'`) → Run → sign in at `/login` with that email/password.
+
+For this deployment, the first administrator (`looth@arh.mv`) was already created this way — no action needed unless you want to add more staff or rotate that password.
 
 ## 9. POS user guide (cashier quick start)
 
