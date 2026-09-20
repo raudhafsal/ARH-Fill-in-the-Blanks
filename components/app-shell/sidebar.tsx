@@ -6,14 +6,20 @@ import { cn } from "@/lib/utils";
 import type { NavItem } from "@/lib/nav-config";
 
 export function Sidebar({ items }: { items: NavItem[] }) {
-  // TEMPORARY DIAGNOSTIC: the previous null-guard on usePathname() didn't fix the
-  // crash, so wrap literally everything (including the hook call itself) in a
-  // try/catch to find out whether it's throwing outright, and print exactly what.
+  // TEMPORARY DIAGNOSTIC BUILD v8 — wrap literally everything (including the
+  // usePathname() call itself) in a try/catch to find out whether it's throwing
+  // outright, and print exactly what. The "v8" tag below is just to confirm
+  // this exact file made it to production — it has nothing to do with the bug.
   try {
     const pathname = usePathname() ?? "";
 
     return (
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
+        <div
+          style={{ fontSize: 10, color: "#16a34a", padding: "2px 8px", background: "#f0fdf4" }}
+        >
+          SIDEBAR BUILD v8
+        </div>
         <div className="flex h-16 items-center gap-2 border-b px-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             ARH
@@ -58,7 +64,7 @@ export function Sidebar({ items }: { items: NavItem[] }) {
           maxWidth: 500,
         }}
       >
-        {"DIAGNOSTIC — Sidebar threw:\n\n"}
+        {"DIAGNOSTIC BUILD v8 — Sidebar threw:\n\n"}
         {"name: " + (err?.name ?? typeof err) + "\n"}
         {"message: " + (err?.message ?? String(err)) + "\n"}
         {"stack:\n" + (err?.stack ?? "n/a")}
