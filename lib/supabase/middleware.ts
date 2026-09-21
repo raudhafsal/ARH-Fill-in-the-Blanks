@@ -35,6 +35,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/reset-password");
   const isPublicAsset = request.nextUrl.pathname.startsWith("/manifest") ||
     request.nextUrl.pathname.startsWith("/icons") ||
+    request.nextUrl.pathname.startsWith("/brand") ||
+    request.nextUrl.pathname.startsWith("/favicon") ||
+    request.nextUrl.pathname.startsWith("/apple-touch-icon") ||
     request.nextUrl.pathname.startsWith("/sw.js") ||
     request.nextUrl.pathname.startsWith("/download");
 
