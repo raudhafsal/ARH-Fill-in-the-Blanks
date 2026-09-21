@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
-import type { Product, Category } from "@/types/database";
+import type { Product, Category, RecipeItem } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatMVR } from "@/lib/utils";
 
@@ -77,6 +77,11 @@ const emptyForm: ProductFormValues = {
 
 type SortKey = "name" | "selling_price" | "current_stock";
 
+interface RecipeRow {
+  ingredient_product_id: string;
+  quantity: string;
+}
+
 function useDebounced<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -111,21 +116,50 @@ export function ProductsClient({
   const [deleteChecking, setDeleteChecking] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
+  const [recipeItems, setRecipeItems] = useState<RecipeRow[]>([]);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+  const [recipeProductIds, setRecipeProductIds] = useState<Set<string>>(new Set());
+
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const unitMap = useMemo(() => new Map(products.map((p) => [p.id, p.unit])), [products]);
+
+  async function refreshRecipeProductIds() {
+    const { data } = await supabase.from("recipe_items").select("product_id");
+    setRecipeProductIds(new Set((data ?? []).map((r) => r.product_id as string)));
+  }
 
   async function refresh() {
     const { data } = await supabase.from("products").select("*").order("name", { ascending: true });
     setProducts((data ?? []) as Product[]);
+    await refreshRecipeProductIds();
+  }
+
+  useEffect(() => {
+    refreshRecipeProductIds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function addRecipeRow() {
+    setRecipeItems((rows) => [...rows, { ingredient_product_id: "", quantity: "1" }]);
+  }
+
+  function updateRecipeRow(index: number, patch: Partial<RecipeRow>) {
+    setRecipeItems((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  function removeRecipeRow(index: number) {
+    setRecipeItems((rows) => rows.filter((_, i) => i !== index));
   }
 
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
     setErrors({});
+    setRecipeItems([]);
     setDialogOpen(true);
   }
 
-  function openEdit(product: Product) {
+  async function openEdit(product: Product) {
     setEditing(product);
     setForm({
       name: product.name,
@@ -145,7 +179,36 @@ export function ProductsClient({
       tax_rate: String(product.tax_rate),
     });
     setErrors({});
+    setRecipeItems([]);
     setDialogOpen(true);
+    setRecipeLoading(true);
+    try {
+      const { data } = await supabase.from("recipe_items").select("*").eq("product_id", product.id);
+      setRecipeItems(
+        ((data ?? []) as RecipeItem[]).map((r) => ({
+          ingredient_product_id: r.ingredient_product_id,
+          quantity: String(r.quantity),
+        }))
+      );
+    } finally {
+      setRecipeLoading(false);
+    }
+  }
+
+  async function saveRecipeItems(productId: string) {
+    const validRows = recipeItems.filter((r) => r.ingredient_product_id && Number(r.quantity) > 0);
+    const { error: delError } = await supabase.from("recipe_items").delete().eq("product_id", productId);
+    if (delError) throw delError;
+    if (validRows.length > 0) {
+      const { error: insError } = await supabase.from("recipe_items").insert(
+        validRows.map((r) => ({
+          product_id: productId,
+          ingredient_product_id: r.ingredient_product_id,
+          quantity: Number(r.quantity),
+        }))
+      );
+      if (insError) throw insError;
+    }
   }
 
   async function handleSubmit() {
@@ -178,15 +241,19 @@ export function ProductsClient({
         tax_enabled: result.data.tax_enabled,
         tax_rate: result.data.tax_rate,
       };
+      let productId = editing?.id;
       if (editing) {
         const { error } = await supabase.from("products").update(payload).eq("id", editing.id);
         if (error) throw error;
-        toast.success("Product updated.");
       } else {
-        const { error } = await supabase.from("products").insert(payload);
+        const { data, error } = await supabase.from("products").insert(payload).select().single();
         if (error) throw error;
-        toast.success("Product created.");
+        productId = data.id;
       }
+      if (productId) {
+        await saveRecipeItems(productId);
+      }
+      toast.success(editing ? "Product updated." : "Product created.");
       setDialogOpen(false);
       await refresh();
     } catch {
@@ -380,7 +447,15 @@ export function ProductsClient({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{product.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate font-medium">{product.name}</p>
+                            {recipeProductIds.has(product.id) && (
+                              <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
+                                <ChefHat className="h-2.5 w-2.5" />
+                                Recipe
+                              </Badge>
+                            )}
+                          </div>
                           <p className="truncate text-xs text-muted-foreground">
                             {product.sku ? `SKU: ${product.sku}` : product.barcode ? `Barcode: ${product.barcode}` : "—"}
                           </p>
@@ -576,6 +651,79 @@ export function ProductsClient({
                 <p className="text-sm font-medium">Tax enabled</p>
                 <Switch checked={form.tax_enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, tax_enabled: v }))} />
               </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ChefHat className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Recipe (ingredients)</p>
+                    <p className="text-xs text-muted-foreground">
+                      For a made item like a juice — list what it consumes. Selling it automatically deducts each
+                      ingredient's own stock.
+                    </p>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addRecipeRow} disabled={recipeLoading}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add ingredient
+                </Button>
+              </div>
+
+              {recipeLoading ? (
+                <p className="py-2 text-center text-sm text-muted-foreground">Loading recipe...</p>
+              ) : recipeItems.length === 0 ? (
+                <p className="py-2 text-center text-xs text-muted-foreground">
+                  No ingredients yet — this product's own stock (if tracked) will be deducted as usual.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {recipeItems.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Select
+                        value={row.ingredient_product_id || undefined}
+                        onValueChange={(v) => updateRecipeRow(i, { ingredient_product_id: v })}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Select ingredient product..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products
+                            .filter((p) => p.id !== editing?.id)
+                            .map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        className="w-24"
+                        value={row.quantity}
+                        onChange={(e) => updateRecipeRow(i, { quantity: e.target.value })}
+                      />
+                      <span className="w-10 shrink-0 text-xs text-muted-foreground">
+                        {unitMap.get(row.ingredient_product_id) ?? ""}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                        onClick={() => removeRecipeRow(i)}
+                        aria-label="Remove ingredient"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">Quantities are per 1 {form.unit || "unit"} sold.</p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
