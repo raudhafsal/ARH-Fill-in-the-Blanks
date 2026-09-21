@@ -67,6 +67,16 @@ export interface Product {
   updated_at: string;
 }
 
+/** Bill-of-materials row: `product_id` consumes `quantity` units of `ingredient_product_id` per 1 unit sold. */
+export interface RecipeItem {
+  id: string;
+  product_id: string;
+  ingredient_product_id: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
