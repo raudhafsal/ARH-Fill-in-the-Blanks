@@ -13,9 +13,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { formatMVR, round2 } from "@/lib/utils";
+
+const quickSupplierSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(150),
+  phone: z.string().trim().max(30).optional(),
+  email: z.string().trim().max(150).optional(),
+});
+
+const quickProductSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(150),
+  unit: z.string().trim().min(1, "Unit is required").max(30),
+  cost_price: z.coerce.number().min(0, "Must be 0 or more"),
+  selling_price: z.coerce.number().min(0, "Must be 0 or more"),
+});
 
 type LineItem = {
   key: string;
@@ -51,6 +65,9 @@ export function PurchaseForm({
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
+  const [supplierList, setSupplierList] = useState<Supplier[]>(suppliers);
+  const [productList, setProductList] = useState<Product[]>(products);
+
   const [supplierId, setSupplierId] = useState(existingPurchase?.supplier_id ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState(existingPurchase?.invoice_number ?? "");
   const [purchaseDate, setPurchaseDate] = useState(
@@ -70,7 +87,97 @@ export function PurchaseForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
+  const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "" });
+  const [supplierErrors, setSupplierErrors] = useState<Record<string, string>>({});
+  const [supplierSaving, setSupplierSaving] = useState(false);
+
+  const [productDialogLineKey, setProductDialogLineKey] = useState<string | null>(null);
+  const [productForm, setProductForm] = useState({ name: "", unit: "pc", cost_price: "0", selling_price: "0" });
+  const [productErrors, setProductErrors] = useState<Record<string, string>>({});
+  const [productSaving, setProductSaving] = useState(false);
+
+  const productMap = useMemo(() => new Map(productList.map((p) => [p.id, p])), [productList]);
+
+  function openSupplierCreate() {
+    setSupplierForm({ name: "", phone: "", email: "" });
+    setSupplierErrors({});
+    setSupplierDialogOpen(true);
+  }
+
+  async function handleCreateSupplier() {
+    const result = quickSupplierSchema.safeParse(supplierForm);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of result.error.issues) fieldErrors[String(issue.path[0])] = issue.message;
+      setSupplierErrors(fieldErrors);
+      return;
+    }
+    setSupplierErrors({});
+    setSupplierSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("suppliers")
+        .insert({
+          name: result.data.name,
+          phone: result.data.phone || null,
+          email: result.data.email || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      setSupplierList((prev) => [...prev, data as Supplier].sort((a, b) => a.name.localeCompare(b.name)));
+      setSupplierId(data.id);
+      toast.success("Supplier added.");
+      setSupplierDialogOpen(false);
+    } catch {
+      toast.error("Unable to add supplier. Please try again.");
+    } finally {
+      setSupplierSaving(false);
+    }
+  }
+
+  function openProductCreate(lineKey: string) {
+    setProductForm({ name: "", unit: "pc", cost_price: "0", selling_price: "0" });
+    setProductErrors({});
+    setProductDialogLineKey(lineKey);
+  }
+
+  async function handleCreateProduct() {
+    const result = quickProductSchema.safeParse(productForm);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of result.error.issues) fieldErrors[String(issue.path[0])] = issue.message;
+      setProductErrors(fieldErrors);
+      return;
+    }
+    setProductErrors({});
+    setProductSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .insert({
+          name: result.data.name,
+          unit: result.data.unit,
+          cost_price: result.data.cost_price,
+          selling_price: result.data.selling_price,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      const newProduct = data as Product;
+      setProductList((prev) => [...prev, newProduct].sort((a, b) => a.name.localeCompare(b.name)));
+      if (productDialogLineKey) {
+        onProductSelectFor(productDialogLineKey, newProduct);
+      }
+      toast.success("Product added.");
+      setProductDialogLineKey(null);
+    } catch {
+      toast.error("Unable to add product. Please try again.");
+    } finally {
+      setProductSaving(false);
+    }
+  }
 
   function updateLine(key: string, patch: Partial<LineItem>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -83,6 +190,10 @@ export function PurchaseForm({
   function onProductSelect(key: string, productId: string) {
     const product = productMap.get(productId);
     updateLine(key, { product_id: productId, cost_price: product ? String(product.cost_price) : "0" });
+  }
+
+  function onProductSelectFor(key: string, product: Product) {
+    updateLine(key, { product_id: product.id, cost_price: String(product.cost_price) });
   }
 
   const lineTotals = lines.map((l) => round2(Number(l.quantity || 0) * Number(l.cost_price || 0)));
@@ -179,18 +290,23 @@ export function PurchaseForm({
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Supplier</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={supplierId} onValueChange={setSupplierId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supplierList.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={openSupplierCreate} aria-label="New supplier">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
               {errors.supplier_id && <p className="text-sm text-destructive">{errors.supplier_id}</p>}
             </div>
             <div className="space-y-2">
@@ -234,18 +350,30 @@ export function PurchaseForm({
                   {lines.map((l, idx) => (
                     <TableRow key={l.key}>
                       <TableCell>
+                        <div className="flex gap-2">
                         <Select value={l.product_id} onValueChange={(v) => onProductSelect(l.key, v)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select product" />
                           </SelectTrigger>
                           <SelectContent>
-                            {products.map((p) => (
+                            {productList.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          onClick={() => openProductCreate(l.key)}
+                          aria-label="New product"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -297,6 +425,114 @@ export function PurchaseForm({
           </Button>
         </div>
       </div>
+
+      <Dialog open={supplierDialogOpen} onOpenChange={(open) => !supplierSaving && setSupplierDialogOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New supplier</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="qs-name">Name</Label>
+              <Input
+                id="qs-name"
+                value={supplierForm.name}
+                onChange={(e) => setSupplierForm((f) => ({ ...f, name: e.target.value }))}
+                autoFocus
+              />
+              {supplierErrors.name && <p className="text-sm text-destructive">{supplierErrors.name}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qs-phone">Phone</Label>
+              <Input id="qs-phone" value={supplierForm.phone} onChange={(e) => setSupplierForm((f) => ({ ...f, phone: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qs-email">Email</Label>
+              <Input id="qs-email" value={supplierForm.email} onChange={(e) => setSupplierForm((f) => ({ ...f, email: e.target.value }))} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You can add contact details, address and notes later from the Suppliers tab.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSupplierDialogOpen(false)} disabled={supplierSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateSupplier} disabled={supplierSaving}>
+              {supplierSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Add supplier
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!productDialogLineKey} onOpenChange={(open) => !productSaving && !open && setProductDialogLineKey(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="qp-name">Name</Label>
+              <Input
+                id="qp-name"
+                value={productForm.name}
+                onChange={(e) => setProductForm((f) => ({ ...f, name: e.target.value }))}
+                autoFocus
+              />
+              {productErrors.name && <p className="text-sm text-destructive">{productErrors.name}</p>}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="qp-unit">Unit</Label>
+                <Input
+                  id="qp-unit"
+                  value={productForm.unit}
+                  onChange={(e) => setProductForm((f) => ({ ...f, unit: e.target.value }))}
+                  placeholder="pc, kg..."
+                />
+                {productErrors.unit && <p className="text-sm text-destructive">{productErrors.unit}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="qp-cost">Cost price</Label>
+                <Input
+                  id="qp-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={productForm.cost_price}
+                  onChange={(e) => setProductForm((f) => ({ ...f, cost_price: e.target.value }))}
+                />
+                {productErrors.cost_price && <p className="text-sm text-destructive">{productErrors.cost_price}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="qp-price">Selling price</Label>
+                <Input
+                  id="qp-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={productForm.selling_price}
+                  onChange={(e) => setProductForm((f) => ({ ...f, selling_price: e.target.value }))}
+                />
+                {productErrors.selling_price && <p className="text-sm text-destructive">{productErrors.selling_price}</p>}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You can set a category, image, tax and stock levels later from the Products page.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProductDialogLineKey(null)} disabled={productSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateProduct} disabled={productSaving}>
+              {productSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Add product
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
