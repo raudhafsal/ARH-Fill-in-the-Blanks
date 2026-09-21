@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -57,7 +56,8 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
         />
         <div id="po-print-area" className="space-y-4 p-4 sm:p-6">
           <div className="hidden items-center gap-3 border-b pb-4 print:flex">
-            <Image src="/brand/logo-mark.png" alt="" width={48} height={48} className="h-12 w-12" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-mark.png" alt="" className="h-12 w-12 object-contain" />
             <div>
               <p className="text-lg font-bold">{businessSettings?.business_name ?? "ARH Fill in the Blank"}</p>
               {businessSettings?.address && <p className="text-xs text-muted-foreground">{businessSettings.address}</p>}

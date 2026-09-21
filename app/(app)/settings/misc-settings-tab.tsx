@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Printer, Smartphone } from "lucide-react";
 
 const RECEIPT_WIDTH_KEY = "arh-pos:receipt-width";
 const WARN_NEGATIVE_STOCK_KEY = "arh-pos:warn-negative-stock";
@@ -51,6 +53,21 @@ export function MiscSettingsTab() {
 
   return (
     <div className="mt-4 space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4" />
+            Install the app
+          </CardTitle>
+          <CardDescription>Add ARH Fill in the Blank POS to a phone or computer's home screen.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" asChild>
+            <Link href="/download">Get install instructions</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
