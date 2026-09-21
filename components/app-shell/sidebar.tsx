@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/lib/nav-config";
@@ -11,9 +12,7 @@ export function Sidebar({ items }: { items: NavItem[] }) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b px-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-          ARH
-        </div>
+        <Image src="/brand/logo-mark.png" alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-lg" priority />
         <div className="leading-tight">
           <p className="text-sm font-semibold">ARH Fill in the Blank</p>
           <p className="text-xs text-muted-foreground">Point of Sale</p>

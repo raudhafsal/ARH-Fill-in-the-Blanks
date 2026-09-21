@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
@@ -35,9 +36,8 @@ export function Header({ profile }: { profile: Profile }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b bg-card/95 px-4 backdrop-blur">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="hidden h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground md:flex">
-          ARH
-        </div>
+        <Image src="/brand/logo-mark.png" alt="" width={36} height={36} className="hidden h-9 w-9 shrink-0 rounded-lg md:block" priority />
+
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-tight">ARH Fill in the Blank</p>
           <LiveClock />

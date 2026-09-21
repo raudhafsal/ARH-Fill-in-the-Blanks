@@ -18,7 +18,7 @@ export function Receipt({
   width = "a4",
 }: {
   data: ReceiptData;
-  business: Pick<BusinessSettings, "business_name" | "address" | "phone" | "receipt_footer">;
+  business: Pick<BusinessSettings, "business_name" | "logo_url" | "address" | "phone" | "receipt_footer">;
   width?: "58mm" | "80mm" | "a4";
 }) {
   return (
@@ -32,6 +32,12 @@ export function Receipt({
       )}
     >
       <div className="mb-3 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={business.logo_url || "/brand/logo-mark.png"}
+          alt=""
+          className={cn("mx-auto mb-1.5 object-contain", width === "a4" ? "h-14 w-14" : "h-10 w-10")}
+        />
         <p className="text-base font-bold">{business.business_name}</p>
         {business.address && <p className="text-xs text-muted-foreground">{business.address}</p>}
         {business.phone && <p className="text-xs text-muted-foreground">{business.phone}</p>}
