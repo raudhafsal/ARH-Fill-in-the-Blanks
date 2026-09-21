@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ArrowLeft } from "lucide-react";
 import { formatMVR, formatMaldivesDate, formatMaldivesDateTime } from "@/lib/utils";
+import { PrintButton } from "@/components/shared/print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +26,12 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
   await requireRole(["administrator", "manager"]);
   const supabase = createClient();
 
-  const [{ data: purchase }, { data: items }, { data: suppliers }, { data: products }] = await Promise.all([
-    supabase.from("purchases").select("*, supplier:suppliers(name)").eq("id", params.id).single(),
+  const [{ data: purchase }, { data: items }, { data: suppliers }, { data: products }, { data: businessSettings }] = await Promise.all([
+    supabase.from("purchases").select("*, supplier:suppliers(name, address, phone, email)").eq("id", params.id).single(),
     supabase.from("purchase_items").select("*, product:products(name)").eq("purchase_id", params.id),
     supabase.from("suppliers").select("*").order("name", { ascending: true }),
     supabase.from("products").select("*").order("name", { ascending: true }),
+    supabase.from("business_settings").select("*").maybeSingle(),
   ]);
 
   if (!purchase) notFound();
@@ -41,15 +44,31 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
           title={`Purchase — ${purchase.supplier?.name ?? "Unknown supplier"}`}
           description={formatMaldivesDate(purchase.purchase_date)}
           actions={
-            <Button variant="outline" asChild>
-              <Link href="/purchases">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <PrintButton label="Print purchase order" />
+              <Button variant="outline" asChild className="no-print">
+                <Link href="/purchases">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Link>
+              </Button>
+            </div>
           }
         />
-        <div className="space-y-4 p-4 sm:p-6">
+        <div id="po-print-area" className="space-y-4 p-4 sm:p-6">
+          <div className="hidden items-center gap-3 border-b pb-4 print:flex">
+            <Image src="/brand/logo-mark.png" alt="" width={48} height={48} className="h-12 w-12" />
+            <div>
+              <p className="text-lg font-bold">{businessSettings?.business_name ?? "ARH Fill in the Blank"}</p>
+              {businessSettings?.address && <p className="text-xs text-muted-foreground">{businessSettings.address}</p>}
+              {businessSettings?.phone && <p className="text-xs text-muted-foreground">{businessSettings.phone}</p>}
+            </div>
+            <div className="ml-auto text-right text-xs text-muted-foreground">
+              <p className="text-sm font-semibold uppercase tracking-wide">Purchase Order</p>
+              {purchase.supplier?.name && <p>Supplier: {purchase.supplier.name}</p>}
+              {(purchase.supplier as any)?.phone && <p>{(purchase.supplier as any).phone}</p>}
+            </div>
+          </div>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">Details</CardTitle>

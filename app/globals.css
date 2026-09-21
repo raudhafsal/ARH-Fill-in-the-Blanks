@@ -78,10 +78,13 @@
     visibility: hidden;
   }
   #receipt-print-area,
-  #receipt-print-area * {
+  #receipt-print-area *,
+  #po-print-area,
+  #po-print-area * {
     visibility: visible;
   }
-  #receipt-print-area {
+  #receipt-print-area,
+  #po-print-area {
     position: absolute;
     left: 0;
     top: 0;

@@ -2,14 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-import { EmptyState } from "@/components/shared/empty-state";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { formatMVR, formatMaldivesTime, formatMaldivesDate } from "@/lib/utils";
+import { formatMVR } from "@/lib/utils";
 import { maldivesStartOfDay, maldivesEndOfDay, maldivesDayLabel } from "@/lib/maldives-time";
 import { SalesByDayChart, OrdersByDayChart, CategoryPieChart, PaymentMethodChart } from "./charts";
-import { DollarSign, ShoppingBag, TrendingUp, Wallet, Package, AlertTriangle, XCircle, Users, Receipt } from "lucide-react";
+import { BillHistory } from "./bill-history";
+import { DollarSign, ShoppingBag, TrendingUp, Wallet, Package, AlertTriangle, XCircle, Users } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +52,12 @@ export default async function DashboardPage() {
     supabase.from("payments").select("amount,created_at,payment_method:payment_methods(name)").gte("created_at", weekStart),
     supabase.from("payment_methods").select("id,name").eq("enabled", true),
   ]);
+
+  const { data: pendingVoidRequests } = await supabase
+    .from("void_requests")
+    .select("id,order_id,reason,created_at,order:orders(order_number,total),requester:profiles!void_requests_requested_by_fkey(full_name)")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
 
   const isFinance = profile.role !== "cashier";
 
@@ -152,45 +155,11 @@ export default async function DashboardPage() {
           <PaymentMethodChart data={pmData} />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent orders</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 sm:p-0">
-            {!recentOrders?.length ? (
-              <EmptyState icon={Receipt} title="No orders yet" description="Sales will show up here as soon as you make one." className="border-none" />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order #</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Cashier</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentOrders.map((o: any) => (
-                    <TableRow key={o.id}>
-                      <TableCell className="font-medium">{o.order_number}</TableCell>
-                      <TableCell>{formatMaldivesDate(o.created_at)} {formatMaldivesTime(o.created_at)}</TableCell>
-                      <TableCell>{o.cashier?.full_name ?? "—"}</TableCell>
-                      <TableCell>{formatMVR(o.total)}</TableCell>
-                      <TableCell>
-                        {o.voided ? (
-                          <Badge variant="destructive">Voided</Badge>
-                        ) : (
-                          <Badge variant="success" className="capitalize">{o.status}</Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <BillHistory
+          orders={(recentOrders ?? []) as any}
+          pendingRequests={(pendingVoidRequests ?? []) as any}
+          canManage={isFinance}
+        />
       </div>
     </div>
   );
