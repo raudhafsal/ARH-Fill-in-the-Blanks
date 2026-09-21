@@ -18,8 +18,16 @@ const withPWA = require("next-pwa")({
       urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
       handler: "CacheFirst",
       options: {
-        cacheName: "image-cache",
+        // Renamed from "image-cache" to "image-cache-v2": some devices had
+        // already cached a broken/404 response for a brand image under the
+        // old cache name (from before those files existed), and CacheFirst
+        // would keep serving that cached failure forever even after the
+        // real file was deployed. The new cache name gives everyone a clean
+        // slate. `cacheableResponse` also stops a failed (non-2xx) response
+        // from ever being cached again going forward.
+        cacheName: "image-cache-v2",
         expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 60 * 60 },
+        cacheableResponse: { statuses: [0, 200] },
       },
     },
     {
