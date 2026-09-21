@@ -39,6 +39,15 @@ const nextConfig = {
     ],
   },
   eslint: { ignoreDuringBuilds: true },
+  experimental: {
+    // Disable the client-side Router Cache for dynamic routes so pages like
+    // the dashboard always refetch fresh data after navigating back to them
+    // (e.g. right after completing a POS sale), instead of showing a stale
+    // cached view for up to 30 seconds.
+    staleTimes: {
+      dynamic: 0,
+    },
+  },
 };
 
 module.exports = withPWA(nextConfig);
