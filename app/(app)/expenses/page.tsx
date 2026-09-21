@@ -7,7 +7,7 @@ import { thisMonthRange } from "@/lib/date-range";
 export const dynamic = "force-dynamic";
 
 export default async function ExpensesPage() {
-  await requireRole(["administrator", "manager"]);
+  const profile = await requireRole(["administrator", "manager"]);
   const supabase = createClient();
 
   const { from, to } = thisMonthRange();
@@ -30,6 +30,7 @@ export default async function ExpensesPage() {
       paymentMethods={(paymentMethods ?? []) as PaymentMethod[]}
       initialFrom={from}
       initialTo={to}
+      isAdmin={profile.role === "administrator"}
     />
   );
 }

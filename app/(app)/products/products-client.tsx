@@ -82,6 +82,10 @@ interface RecipeRow {
   quantity: string;
 }
 
+const quickCategorySchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+});
+
 function useDebounced<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -100,6 +104,7 @@ export function ProductsClient({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [categoryList, setCategoryList] = useState<Category[]>(categories);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -120,7 +125,12 @@ export function ProductsClient({
   const [recipeLoading, setRecipeLoading] = useState(false);
   const [recipeProductIds, setRecipeProductIds] = useState<Set<string>>(new Set());
 
-  const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({ name: "" });
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [categorySaving, setCategorySaving] = useState(false);
+
+  const categoryMap = useMemo(() => new Map(categoryList.map((c) => [c.id, c.name])), [categoryList]);
   const unitMap = useMemo(() => new Map(products.map((p) => [p.id, p.unit])), [products]);
 
   async function refreshRecipeProductIds() {
@@ -311,6 +321,39 @@ export function ProductsClient({
     }
   }
 
+  function openCategoryCreate() {
+    setCategoryForm({ name: "" });
+    setCategoryError(null);
+    setCategoryDialogOpen(true);
+  }
+
+  async function handleCreateCategory() {
+    const result = quickCategorySchema.safeParse(categoryForm);
+    if (!result.success) {
+      setCategoryError(result.error.issues[0]?.message ?? "Invalid name");
+      return;
+    }
+    setCategoryError(null);
+    setCategorySaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({ name: result.data.name })
+        .select()
+        .single();
+      if (error) throw error;
+      const newCategory = data as Category;
+      setCategoryList((prev) => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm((f) => ({ ...f, category_id: newCategory.id }));
+      setCategoryDialogOpen(false);
+      toast.success("Category created.");
+    } catch {
+      toast.error("Unable to create category. Please try again.");
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -377,7 +420,7 @@ export function ProductsClient({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
-              {categories.map((c) => (
+              {categoryList.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
                 </SelectItem>
@@ -541,22 +584,27 @@ export function ProductsClient({
 
               <div className="space-y-2 sm:col-span-2">
                 <Label>Category</Label>
-                <Select
-                  value={form.category_id ?? "none"}
-                  onValueChange={(v) => setForm((f) => ({ ...f, category_id: v === "none" ? null : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="No category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No category</SelectItem>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select
+                    value={form.category_id ?? "none"}
+                    onValueChange={(v) => setForm((f) => ({ ...f, category_id: v === "none" ? null : v }))}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="No category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No category</SelectItem>
+                      {categoryList.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" size="icon" onClick={openCategoryCreate} aria-label="Quick add category">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2 sm:col-span-2">
@@ -733,6 +781,33 @@ export function ProductsClient({
             <Button onClick={handleSubmit} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save changes" : "Create product"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={categoryDialogOpen} onOpenChange={(open) => !categorySaving && setCategoryDialogOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="qc-name">Name</Label>
+            <Input
+              id="qc-name"
+              value={categoryForm.name}
+              onChange={(e) => setCategoryForm({ name: e.target.value })}
+              autoFocus
+            />
+            {categoryError && <p className="text-sm text-destructive">{categoryError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCategoryDialogOpen(false)} disabled={categorySaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateCategory} disabled={categorySaving}>
+              {categorySaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create category
             </Button>
           </DialogFooter>
         </DialogContent>
