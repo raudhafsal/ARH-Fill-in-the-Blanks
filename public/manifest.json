@@ -4,8 +4,8 @@
   "description": "Point of Sale system for ARH Fill in the Blank",
   "start_url": "/pos",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "background_color": "#f6f1e7",
+  "theme_color": "#1f2a44",
   "orientation": "any",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

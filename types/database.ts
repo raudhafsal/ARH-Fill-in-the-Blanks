@@ -269,6 +269,18 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface VoidRequest {
+  id: string;
+  order_id: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requested_by: string;
+  created_at: string;
+  reviewed_by: string | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+}
+
 export interface AppNotification {
   id: string;
   user_id: string | null;
