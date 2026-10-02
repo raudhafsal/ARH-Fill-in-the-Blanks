@@ -125,6 +125,27 @@ export interface Customer {
   updated_at: string;
 }
 
+export interface CreditSettlement {
+  id: string;
+  customer_id: string;
+  amount: number;
+  payment_method_id: string | null;
+  reference: string | null;
+  notes: string | null;
+  cashier_id: string | null;
+  created_at: string;
+}
+
+/** Row from the `customer_credit_balances` view — gross credit sales minus refunds minus settlements. */
+export interface CustomerCreditBalance {
+  customer_id: string;
+  full_name: string;
+  gross_credit: number;
+  total_refunded: number;
+  total_settled: number;
+  balance: number;
+}
+
 export interface Order {
   id: string;
   order_number: string;

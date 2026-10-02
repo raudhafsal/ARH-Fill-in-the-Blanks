@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
-import type { Customer } from "@/types/database";
+import type { Customer, CustomerCreditBalance, PaymentMethod } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -13,8 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatMVR } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Users, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,12 +33,17 @@ const emptyForm: CustomerForm = { full_name: "", phone: "", address: "", notes: 
 
 export function CustomersClient({
   initialCustomers,
+  initialBalances,
+  paymentMethods,
   canManage,
 }: {
   initialCustomers: Customer[];
+  initialBalances: CustomerCreditBalance[];
+  paymentMethods: PaymentMethod[];
   canManage: boolean;
 }) {
   const [customers, setCustomers] = useState(initialCustomers);
+  const [balances, setBalances] = useState(initialBalances);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -60,6 +67,16 @@ export function CustomersClient({
         (c.phone ?? "").toLowerCase().includes(debouncedSearch)
     );
   }, [customers, debouncedSearch]);
+
+  function balanceFor(customerId: string): number {
+    return balances.find((b) => b.customer_id === customerId)?.balance ?? 0;
+  }
+
+  async function refetchBalances() {
+    const supabase = createClient();
+    const { data } = await supabase.from("customer_credit_balances").select("*");
+    setBalances((data ?? []) as CustomerCreditBalance[]);
+  }
 
   async function refetch() {
     const supabase = createClient();
@@ -168,15 +185,25 @@ export function CustomersClient({
                   <TableHead>Name</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
+                  <TableHead>Credit owed</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((customer) => (
+                {filtered.map((customer) => {
+                  const balance = balanceFor(customer.id);
+                  return (
                   <TableRow key={customer.id} className="cursor-pointer" onClick={() => setDetailCustomer(customer)}>
                     <TableCell className="font-medium">{customer.full_name}</TableCell>
                     <TableCell>{customer.phone || "—"}</TableCell>
                     <TableCell className="max-w-xs truncate">{customer.address || "—"}</TableCell>
+                    <TableCell>
+                      {balance > 0 ? (
+                        <Badge variant="warning">{formatMVR(balance)}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       {canManage && (
                         <div className="flex justify-end gap-1">
@@ -190,7 +217,8 @@ export function CustomersClient({
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </Card>
@@ -244,7 +272,13 @@ export function CustomersClient({
         }}
       />
 
-      <CustomerDetailDialog customer={detailCustomer} onOpenChange={(open) => !open && setDetailCustomer(null)} />
+      <CustomerDetailDialog
+        customer={detailCustomer}
+        onOpenChange={(open) => !open && setDetailCustomer(null)}
+        balance={detailCustomer ? balanceFor(detailCustomer.id) : 0}
+        paymentMethods={paymentMethods}
+        onSettled={refetchBalances}
+      />
     </div>
   );
 }
