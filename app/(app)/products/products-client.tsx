@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X, Ruler, Layers, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X, Ruler, Layers, Star, FileUp } from "lucide-react";
+import { CsvImportDialog } from "./csv-import-dialog";
 import { toast } from "sonner";
 import { cn, formatMVR } from "@/lib/utils";
 
@@ -153,6 +154,8 @@ export function ProductsClient({
   const [unitRows, setUnitRows] = useState<UnitRow[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
 
+  const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: "" });
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -184,8 +187,12 @@ export function ProductsClient({
   }
 
   async function refresh() {
-    const { data } = await supabase.from("products").select("*").order("name", { ascending: true });
+    const [{ data }, { data: categoryData }] = await Promise.all([
+      supabase.from("products").select("*").order("name", { ascending: true }),
+      supabase.from("categories").select("*").order("display_order", { ascending: true }),
+    ]);
     setProducts((data ?? []) as Product[]);
+    setCategoryList((categoryData ?? []) as Category[]);
     await refreshRecipeProductIds();
   }
 
@@ -506,10 +513,16 @@ export function ProductsClient({
         title="Products"
         description="Manage your product catalog, pricing and stock."
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            New product
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setCsvDialogOpen(true)}>
+              <FileUp className="h-4 w-4" />
+              Import CSV
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              New product
+            </Button>
+          </div>
         }
       />
 
@@ -1104,6 +1117,13 @@ export function ProductsClient({
         description={`This will permanently delete "${deleteTarget?.name}".`}
         confirmLabel="Delete"
         onConfirm={handleDelete}
+      />
+
+      <CsvImportDialog
+        open={csvDialogOpen}
+        onOpenChange={setCsvDialogOpen}
+        categories={categoryList}
+        onImported={refresh}
       />
     </div>
   );
