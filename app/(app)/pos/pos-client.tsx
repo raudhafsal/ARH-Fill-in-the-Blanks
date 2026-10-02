@@ -23,7 +23,7 @@ import type {
   TaxSettings,
 } from "@/types/database";
 
-import { CategoryTabs } from "@/components/pos/category-tabs";
+import { CategoryTiles, ALL_ITEMS_ID } from "@/components/pos/category-tiles";
 import { ProductGrid } from "@/components/pos/product-grid";
 import { CartPanel } from "@/components/pos/cart-panel";
 import { CartItemEditDialog } from "@/components/pos/cart-item-edit-dialog";
@@ -38,7 +38,7 @@ import { Receipt } from "@/components/pos/receipt";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, ShoppingCart, Inbox, Printer } from "lucide-react";
+import { Search, ShoppingCart, Inbox, Printer, ArrowLeft } from "lucide-react";
 
 export function PosClient({
   profile,
@@ -172,7 +172,7 @@ export function PosClient({
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      if (activeCategory && p.category_id !== activeCategory) return false;
+      if (activeCategory && activeCategory !== ALL_ITEMS_ID && p.category_id !== activeCategory) return false;
       if (!search) return true;
       const q = search;
       return (
@@ -182,6 +182,11 @@ export function PosClient({
       );
     });
   }, [products, activeCategory, search]);
+
+  // Tile home screen (Ewity-style): categories as tiles until one is picked, or the cashier searches.
+  const showCategoryHome = !activeCategory && !search;
+  const activeCategoryName =
+    activeCategory === ALL_ITEMS_ID ? "All items" : categories.find((c) => c.id === activeCategory)?.name ?? null;
 
   function addToCart(product: Product) {
     if (product.track_inventory && product.current_stock <= 0) {
@@ -430,10 +435,22 @@ export function PosClient({
 
           <BarcodeInput onScan={handleBarcodeScan} />
 
-          <CategoryTabs categories={categories} activeId={activeCategory} onSelect={setActiveCategory} />
-
           <div className="pb-24 lg:pb-0">
-            <ProductGrid products={filteredProducts} onSelect={addToCart} />
+            {showCategoryHome ? (
+              <CategoryTiles categories={categories} onSelect={setActiveCategory} />
+            ) : (
+              <div className="flex flex-col gap-3">
+                {activeCategory && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground" onClick={() => setActiveCategory(null)}>
+                      <ArrowLeft className="h-3.5 w-3.5" /> Categories
+                    </Button>
+                    {activeCategoryName && <span className="text-sm font-medium">{activeCategoryName}</span>}
+                  </div>
+                )}
+                <ProductGrid products={filteredProducts} onSelect={addToCart} />
+              </div>
+            )}
           </div>
         </div>
 
