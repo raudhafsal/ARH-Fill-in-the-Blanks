@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
-import type { Supplier, Product, Purchase, PurchaseItem } from "@/types/database";
+import type { Supplier, Product, Purchase, PurchaseItem, ProductUnit } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,10 +36,12 @@ type LineItem = {
   product_id: string;
   quantity: string;
   cost_price: string;
+  /** "" means the product's base unit. Otherwise a product_units.id. */
+  unit_choice: string;
 };
 
 function newLine(): LineItem {
-  return { key: crypto.randomUUID(), product_id: "", quantity: "1", cost_price: "0" };
+  return { key: crypto.randomUUID(), product_id: "", quantity: "1", cost_price: "0", unit_choice: "" };
 }
 
 const headerSchema = z.object({
@@ -53,12 +55,14 @@ export function PurchaseForm({
   mode,
   suppliers,
   products,
+  productUnits,
   existingPurchase,
   existingItems,
 }: {
   mode: "create" | "edit";
   suppliers: Supplier[];
   products: Product[];
+  productUnits: ProductUnit[];
   existingPurchase?: Purchase;
   existingItems?: PurchaseItem[];
 }) {
@@ -67,6 +71,7 @@ export function PurchaseForm({
 
   const [supplierList, setSupplierList] = useState<Supplier[]>(suppliers);
   const [productList, setProductList] = useState<Product[]>(products);
+  const [productUnitList, setProductUnitList] = useState<ProductUnit[]>(productUnits);
 
   const [supplierId, setSupplierId] = useState(existingPurchase?.supplier_id ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState(existingPurchase?.invoice_number ?? "");
@@ -76,12 +81,16 @@ export function PurchaseForm({
   const [notes, setNotes] = useState(existingPurchase?.notes ?? "");
   const [lines, setLines] = useState<LineItem[]>(
     existingItems && existingItems.length > 0
-      ? existingItems.map((i) => ({
-          key: i.id,
-          product_id: i.product_id,
-          quantity: String(i.quantity),
-          cost_price: String(i.cost_price),
-        }))
+      ? existingItems.map((i) => {
+          const matchingUnit = productUnits.find((u) => u.product_id === i.product_id && u.name === i.unit_name);
+          return {
+            key: i.id,
+            product_id: i.product_id,
+            quantity: String(i.entered_quantity ?? i.quantity),
+            cost_price: String(i.cost_price),
+            unit_choice: matchingUnit ? matchingUnit.id : "",
+          };
+        })
       : [newLine()]
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -98,6 +107,25 @@ export function PurchaseForm({
   const [productSaving, setProductSaving] = useState(false);
 
   const productMap = useMemo(() => new Map(productList.map((p) => [p.id, p])), [productList]);
+  const unitsByProduct = useMemo(() => {
+    const m = new Map<string, ProductUnit[]>();
+    for (const u of productUnitList) {
+      const arr = m.get(u.product_id) ?? [];
+      arr.push(u);
+      m.set(u.product_id, arr);
+    }
+    return m;
+  }, [productUnitList]);
+
+  function scaleFor(line: LineItem): number {
+    if (!line.unit_choice) return 1;
+    return productUnitList.find((u) => u.id === line.unit_choice)?.scale ?? 1;
+  }
+
+  function unitNameFor(line: LineItem): string {
+    if (!line.unit_choice) return productMap.get(line.product_id)?.unit ?? "";
+    return productUnitList.find((u) => u.id === line.unit_choice)?.name ?? "";
+  }
 
   function openSupplierCreate() {
     setSupplierForm({ name: "", phone: "", email: "" });
@@ -189,14 +217,15 @@ export function PurchaseForm({
 
   function onProductSelect(key: string, productId: string) {
     const product = productMap.get(productId);
-    updateLine(key, { product_id: productId, cost_price: product ? String(product.cost_price) : "0" });
+    updateLine(key, { product_id: productId, cost_price: product ? String(product.cost_price) : "0", unit_choice: "" });
   }
 
   function onProductSelectFor(key: string, product: Product) {
-    updateLine(key, { product_id: product.id, cost_price: String(product.cost_price) });
+    updateLine(key, { product_id: product.id, cost_price: String(product.cost_price), unit_choice: "" });
   }
 
-  const lineTotals = lines.map((l) => round2(Number(l.quantity || 0) * Number(l.cost_price || 0)));
+  const baseQuantities = lines.map((l) => Number(l.quantity || 0) * scaleFor(l));
+  const lineTotals = lines.map((l, i) => round2(baseQuantities[i] * Number(l.cost_price || 0)));
   const grandTotal = round2(lineTotals.reduce((s, t) => s + t, 0));
 
   async function handleSubmit() {
@@ -249,13 +278,19 @@ export function PurchaseForm({
         purchaseId = data.id;
       }
 
-      const itemsPayload = validLines.map((l, idx) => ({
-        purchase_id: purchaseId,
-        product_id: l.product_id,
-        quantity: Number(l.quantity),
-        cost_price: Number(l.cost_price),
-        total_cost: lineTotals[lines.indexOf(l)],
-      }));
+      const itemsPayload = validLines.map((l) => {
+        const idx = lines.indexOf(l);
+        return {
+          purchase_id: purchaseId,
+          product_id: l.product_id,
+          quantity: baseQuantities[idx],
+          cost_price: Number(l.cost_price),
+          total_cost: lineTotals[idx],
+          unit_name: unitNameFor(l) || null,
+          unit_scale: scaleFor(l),
+          entered_quantity: Number(l.quantity),
+        };
+      });
       const { error: itemsError } = await supabase.from("purchase_items").insert(itemsPayload);
       if (itemsError) throw itemsError;
 
@@ -340,14 +375,18 @@ export function PurchaseForm({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[200px]">Product</TableHead>
-                    <TableHead className="w-28">Quantity</TableHead>
-                    <TableHead className="w-32">Cost price</TableHead>
+                    <TableHead className="w-24">Quantity</TableHead>
+                    <TableHead className="w-28">Unit</TableHead>
+                    <TableHead className="w-32">Cost price / base unit</TableHead>
                     <TableHead className="w-32 text-right">Line total</TableHead>
                     <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lines.map((l, idx) => (
+                  {lines.map((l, idx) => {
+                    const lineUnits = unitsByProduct.get(l.product_id) ?? [];
+                    const baseUnitName = productMap.get(l.product_id)?.unit ?? "unit";
+                    return (
                     <TableRow key={l.key}>
                       <TableCell>
                         <div className="flex gap-2">
@@ -383,6 +422,30 @@ export function PurchaseForm({
                           value={l.quantity}
                           onChange={(e) => updateLine(l.key, { quantity: e.target.value })}
                         />
+                        {l.unit_choice && l.product_id && (
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            = {round2(baseQuantities[idx])} {baseUnitName}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={l.unit_choice || "__base__"}
+                          onValueChange={(v) => updateLine(l.key, { unit_choice: v === "__base__" ? "" : v })}
+                          disabled={!l.product_id}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__base__">{baseUnitName}</SelectItem>
+                            {lineUnits.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.name} ({u.scale} {baseUnitName})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -407,7 +470,8 @@ export function PurchaseForm({
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

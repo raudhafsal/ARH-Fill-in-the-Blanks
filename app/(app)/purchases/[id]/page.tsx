@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Supplier, Product, Purchase, PurchaseItem } from "@/types/database";
+import type { Supplier, Product, Purchase, PurchaseItem, ProductUnit } from "@/types/database";
 import { PurchaseForm } from "../purchase-form";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,13 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
   await requireRole(["administrator", "manager"]);
   const supabase = createClient();
 
-  const [{ data: purchase }, { data: items }, { data: suppliers }, { data: products }, { data: businessSettings }] = await Promise.all([
+  const [{ data: purchase }, { data: items }, { data: suppliers }, { data: products }, { data: businessSettings }, { data: productUnits }] = await Promise.all([
     supabase.from("purchases").select("*, supplier:suppliers(name, address, phone, email)").eq("id", params.id).single(),
     supabase.from("purchase_items").select("*, product:products(name)").eq("purchase_id", params.id),
     supabase.from("suppliers").select("*").order("name", { ascending: true }),
     supabase.from("products").select("*").order("name", { ascending: true }),
     supabase.from("business_settings").select("*").maybeSingle(),
+    supabase.from("product_units").select("*"),
   ]);
 
   if (!purchase) notFound();
@@ -118,7 +119,16 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
                   {typedItems.map((i) => (
                     <TableRow key={i.id}>
                       <TableCell>{i.product?.name ?? "—"}</TableCell>
-                      <TableCell>{i.quantity}</TableCell>
+                      <TableCell>
+                        {i.entered_quantity && i.unit_name && i.unit_name !== (products ?? []).find((p) => p.id === i.product_id)?.unit ? (
+                          <>
+                            {i.entered_quantity} {i.unit_name}{" "}
+                            <span className="text-xs text-muted-foreground">({i.quantity})</span>
+                          </>
+                        ) : (
+                          i.quantity
+                        )}
+                      </TableCell>
                       <TableCell>{formatMVR(i.cost_price)}</TableCell>
                       <TableCell className="text-right">{formatMVR(i.total_cost)}</TableCell>
                     </TableRow>
@@ -140,6 +150,7 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
       mode="edit"
       suppliers={(suppliers ?? []) as Supplier[]}
       products={(products ?? []) as Product[]}
+      productUnits={(productUnits ?? []) as ProductUnit[]}
       existingPurchase={purchase as Purchase}
       existingItems={(items ?? []) as PurchaseItem[]}
     />

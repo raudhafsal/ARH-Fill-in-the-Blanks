@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
-import type { Product, InventoryTxnType } from "@/types/database";
+import type { Product, InventoryTxnType, ProductUnit } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
@@ -57,9 +57,16 @@ function stockStatus(product: Product): "out" | "low" | "ok" {
   return "ok";
 }
 
-export function InventoryClient({ initialProducts }: { initialProducts: Product[] }) {
+export function InventoryClient({
+  initialProducts,
+  initialProductUnits,
+}: {
+  initialProducts: Product[];
+  initialProductUnits: ProductUnit[];
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [productUnits, setProductUnits] = useState<ProductUnit[]>(initialProductUnits);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const [movements, setMovements] = useState<MovementRow[]>([]);
@@ -74,14 +81,27 @@ export function InventoryClient({ initialProducts }: { initialProducts: Product[
     type: "adjustment",
     direction: "increase" as "increase" | "decrease",
     quantity: "",
+    unit_choice: "",
     reason: "",
     notes: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const unitsForSelectedProduct = useMemo(
+    () => productUnits.filter((u) => u.product_id === form.product_id),
+    [productUnits, form.product_id]
+  );
+  const selectedUnitScale = form.unit_choice
+    ? productUnits.find((u) => u.id === form.unit_choice)?.scale ?? 1
+    : 1;
+
   async function refreshProducts() {
-    const { data } = await supabase.from("products").select("*").eq("track_inventory", true).order("name", { ascending: true });
+    const [{ data }, { data: units }] = await Promise.all([
+      supabase.from("products").select("*").eq("track_inventory", true).order("name", { ascending: true }),
+      supabase.from("product_units").select("*"),
+    ]);
     setProducts((data ?? []) as Product[]);
+    setProductUnits((units ?? []) as ProductUnit[]);
   }
 
   async function loadMovements(offset: number) {
@@ -119,7 +139,15 @@ export function InventoryClient({ initialProducts }: { initialProducts: Product[
   const totalValue = products.reduce((s, p) => s + p.current_stock * p.cost_price, 0);
 
   function openAdjust(productId?: string) {
-    setForm({ product_id: productId ?? "", type: "adjustment", direction: "increase", quantity: "", reason: "", notes: "" });
+    setForm({
+      product_id: productId ?? "",
+      type: "adjustment",
+      direction: "increase",
+      quantity: "",
+      unit_choice: "",
+      reason: "",
+      notes: "",
+    });
     setErrors({});
     setDialogOpen(true);
   }
@@ -135,7 +163,8 @@ export function InventoryClient({ initialProducts }: { initialProducts: Product[
     setErrors({});
     setSaving(true);
     try {
-      const signedQuantity = result.data.direction === "increase" ? result.data.quantity : -result.data.quantity;
+      const baseQuantity = result.data.quantity * selectedUnitScale;
+      const signedQuantity = result.data.direction === "increase" ? baseQuantity : -baseQuantity;
       const { error } = await supabase.rpc("adjust_stock", {
         p_product_id: result.data.product_id,
         p_type: result.data.type,
@@ -302,7 +331,10 @@ export function InventoryClient({ initialProducts }: { initialProducts: Product[
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Product</Label>
-              <Select value={form.product_id} onValueChange={(v) => setForm((f) => ({ ...f, product_id: v }))}>
+              <Select
+                value={form.product_id}
+                onValueChange={(v) => setForm((f) => ({ ...f, product_id: v, unit_choice: "" }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a product" />
                 </SelectTrigger>
@@ -378,9 +410,30 @@ export function InventoryClient({ initialProducts }: { initialProducts: Product[
                   onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
                   placeholder="Enter a positive number"
                 />
+                {unitsForSelectedProduct.length > 0 && (
+                  <Select
+                    value={form.unit_choice || "__base__"}
+                    onValueChange={(v) => setForm((f) => ({ ...f, unit_choice: v === "__base__" ? "" : v }))}
+                  >
+                    <SelectTrigger className="w-32 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__base__">{products.find((p) => p.id === form.product_id)?.unit ?? "unit"}</SelectItem>
+                      {unitsForSelectedProduct.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
-                {form.direction === "increase" ? "This will increase" : "This will decrease"} stock by the quantity entered.
+                {form.direction === "increase" ? "This will increase" : "This will decrease"} stock by{" "}
+                {round2(Number(form.quantity || 0) * selectedUnitScale)}{" "}
+                {products.find((p) => p.id === form.product_id)?.unit ?? "unit"}
+                {form.unit_choice ? ` (${form.quantity || 0} selected unit × ${selectedUnitScale})` : ""}.
               </p>
               {errors.quantity && <p className="text-sm text-destructive">{errors.quantity}</p>}
             </div>

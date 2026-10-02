@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
-import type { Product, Category, RecipeItem } from "@/types/database";
+import type { Product, Category, RecipeItem, ProductUnit, ProductVariantGroup } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X, Ruler, Layers, Star } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatMVR } from "@/lib/utils";
 
@@ -37,6 +37,15 @@ const productSchema = z.object({
   track_inventory: z.boolean(),
   tax_enabled: z.boolean(),
   tax_rate: z.coerce.number().min(0, "Must be 0 or more"),
+  variant_group_id: z.string().nullable(),
+  variant_name: z.string().trim().max(100).optional(),
+  new_group_name: z.string().trim().max(100).optional(),
+}).refine((v) => v.variant_group_id !== "__new__" || (v.new_group_name && v.new_group_name.length > 0), {
+  message: "Group name is required",
+  path: ["new_group_name"],
+}).refine((v) => !v.variant_group_id || (v.variant_name && v.variant_name.length > 0), {
+  message: "Variant name is required (e.g. \"With Jelly\")",
+  path: ["variant_name"],
 });
 
 type ProductFormValues = {
@@ -55,6 +64,9 @@ type ProductFormValues = {
   track_inventory: boolean;
   tax_enabled: boolean;
   tax_rate: string;
+  variant_group_id: string | null;
+  variant_name: string;
+  new_group_name: string;
 };
 
 const emptyForm: ProductFormValues = {
@@ -73,6 +85,9 @@ const emptyForm: ProductFormValues = {
   track_inventory: true,
   tax_enabled: false,
   tax_rate: "0",
+  variant_group_id: null,
+  variant_name: "",
+  new_group_name: "",
 };
 
 type SortKey = "name" | "selling_price" | "current_stock";
@@ -80,6 +95,13 @@ type SortKey = "name" | "selling_price" | "current_stock";
 interface RecipeRow {
   ingredient_product_id: string;
   quantity: string;
+}
+
+interface UnitRow {
+  id?: string;
+  name: string;
+  scale: string;
+  is_default: boolean;
 }
 
 const quickCategorySchema = z.object({
@@ -98,13 +120,16 @@ function useDebounced<T>(value: T, delay: number): T {
 export function ProductsClient({
   initialProducts,
   categories,
+  initialVariantGroups,
 }: {
   initialProducts: Product[];
   categories: Category[];
+  initialVariantGroups: ProductVariantGroup[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categoryList, setCategoryList] = useState<Category[]>(categories);
+  const [variantGroupList, setVariantGroupList] = useState<ProductVariantGroup[]>(initialVariantGroups);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -125,6 +150,9 @@ export function ProductsClient({
   const [recipeLoading, setRecipeLoading] = useState(false);
   const [recipeProductIds, setRecipeProductIds] = useState<Set<string>>(new Set());
 
+  const [unitRows, setUnitRows] = useState<UnitRow[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: "" });
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -132,6 +160,23 @@ export function ProductsClient({
 
   const categoryMap = useMemo(() => new Map(categoryList.map((c) => [c.id, c.name])), [categoryList]);
   const unitMap = useMemo(() => new Map(products.map((p) => [p.id, p.unit])), [products]);
+  const variantGroupMap = useMemo(() => new Map(variantGroupList.map((g) => [g.id, g.name])), [variantGroupList]);
+
+  function addUnitRow() {
+    setUnitRows((rows) => [...rows, { name: "", scale: "1", is_default: false }]);
+  }
+
+  function updateUnitRow(index: number, patch: Partial<UnitRow>) {
+    setUnitRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  function removeUnitRow(index: number) {
+    setUnitRows((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  function setDefaultUnitRow(index: number) {
+    setUnitRows((rows) => rows.map((r, i) => ({ ...r, is_default: i === index })));
+  }
 
   async function refreshRecipeProductIds() {
     const { data } = await supabase.from("recipe_items").select("product_id");
@@ -166,6 +211,7 @@ export function ProductsClient({
     setForm(emptyForm);
     setErrors({});
     setRecipeItems([]);
+    setUnitRows([]);
     setDialogOpen(true);
   }
 
@@ -187,21 +233,38 @@ export function ProductsClient({
       track_inventory: product.track_inventory,
       tax_enabled: product.tax_enabled,
       tax_rate: String(product.tax_rate),
+      variant_group_id: product.variant_group_id,
+      variant_name: product.variant_name ?? "",
+      new_group_name: "",
     });
     setErrors({});
     setRecipeItems([]);
+    setUnitRows([]);
     setDialogOpen(true);
     setRecipeLoading(true);
+    setUnitsLoading(true);
     try {
-      const { data } = await supabase.from("recipe_items").select("*").eq("product_id", product.id);
+      const [{ data: recipeData }, { data: unitData }] = await Promise.all([
+        supabase.from("recipe_items").select("*").eq("product_id", product.id),
+        supabase.from("product_units").select("*").eq("product_id", product.id).order("scale", { ascending: true }),
+      ]);
       setRecipeItems(
-        ((data ?? []) as RecipeItem[]).map((r) => ({
+        ((recipeData ?? []) as RecipeItem[]).map((r) => ({
           ingredient_product_id: r.ingredient_product_id,
           quantity: String(r.quantity),
         }))
       );
+      setUnitRows(
+        ((unitData ?? []) as ProductUnit[]).map((u) => ({
+          id: u.id,
+          name: u.name,
+          scale: String(u.scale),
+          is_default: u.is_default,
+        }))
+      );
     } finally {
       setRecipeLoading(false);
+      setUnitsLoading(false);
     }
   }
 
@@ -221,6 +284,23 @@ export function ProductsClient({
     }
   }
 
+  async function saveUnitRows(productId: string) {
+    const validRows = unitRows.filter((r) => r.name.trim() && Number(r.scale) > 0);
+    const { error: delError } = await supabase.from("product_units").delete().eq("product_id", productId);
+    if (delError) throw delError;
+    if (validRows.length > 0) {
+      const { error: insError } = await supabase.from("product_units").insert(
+        validRows.map((r) => ({
+          product_id: productId,
+          name: r.name.trim(),
+          scale: Number(r.scale),
+          is_default: r.is_default,
+        }))
+      );
+      if (insError) throw insError;
+    }
+  }
+
   async function handleSubmit() {
     const result = productSchema.safeParse(form);
     if (!result.success) {
@@ -231,9 +311,36 @@ export function ProductsClient({
       setErrors(fieldErrors);
       return;
     }
+    const dupUnitNames = new Set<string>();
+    for (const r of unitRows) {
+      const n = r.name.trim().toLowerCase();
+      if (!n) continue;
+      if (dupUnitNames.has(n)) {
+        setErrors({ units: "Unit names must be unique for this product." });
+        return;
+      }
+      dupUnitNames.add(n);
+    }
     setErrors({});
     setSaving(true);
     try {
+      let variantGroupId: string | null = result.data.variant_group_id;
+      if (variantGroupId === "__new__") {
+        const { data: groupData, error: groupError } = await supabase
+          .from("product_variant_groups")
+          .insert({
+            name: result.data.new_group_name!.trim(),
+            category_id: result.data.category_id || null,
+            image_url: result.data.image_url || null,
+          })
+          .select()
+          .single();
+        if (groupError) throw groupError;
+        const newGroup = groupData as ProductVariantGroup;
+        setVariantGroupList((prev) => [...prev, newGroup].sort((a, b) => a.name.localeCompare(b.name)));
+        variantGroupId = newGroup.id;
+      }
+
       const payload = {
         name: result.data.name,
         sku: result.data.sku || null,
@@ -250,6 +357,8 @@ export function ProductsClient({
         track_inventory: result.data.track_inventory,
         tax_enabled: result.data.tax_enabled,
         tax_rate: result.data.tax_rate,
+        variant_group_id: variantGroupId || null,
+        variant_name: variantGroupId ? result.data.variant_name!.trim() : null,
       };
       let productId = editing?.id;
       if (editing) {
@@ -262,6 +371,7 @@ export function ProductsClient({
       }
       if (productId) {
         await saveRecipeItems(productId);
+        await saveUnitRows(productId);
       }
       toast.success(editing ? "Product updated." : "Product created.");
       setDialogOpen(false);
@@ -499,6 +609,14 @@ export function ProductsClient({
                               </Badge>
                             )}
                           </div>
+                          {product.variant_group_id && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Layers className="h-2.5 w-2.5" />
+                              <span className="truncate">
+                                {variantGroupMap.get(product.variant_group_id) ?? "Group"} · {product.variant_name}
+                              </span>
+                            </div>
+                          )}
                           <p className="truncate text-xs text-muted-foreground">
                             {product.sku ? `SKU: ${product.sku}` : product.barcode ? `Barcode: ${product.barcode}` : "—"}
                           </p>
@@ -684,6 +802,172 @@ export function ProductsClient({
                   disabled={!form.tax_enabled}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Ruler className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Units of measurement</p>
+                    <p className="text-xs text-muted-foreground">
+                      Stock is always counted in the base unit above ({form.unit || "unit"}). Add other units you buy
+                      or sell in — e.g. a "Case" of 100 pcs — and purchases can convert automatically.
+                    </p>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addUnitRow} disabled={unitsLoading}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add unit
+                </Button>
+              </div>
+
+              {errors.units && <p className="text-sm text-destructive">{errors.units}</p>}
+
+              <div className="overflow-hidden rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="w-28">Scale</TableHead>
+                      <TableHead className="w-20">Default</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-medium">{form.unit || "Base unit"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">1 (base)</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
+                          Base unit
+                        </Badge>
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                    {unitsLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="py-3 text-center text-sm text-muted-foreground">
+                          Loading units...
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      unitRows.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell>
+                            <Input
+                              value={row.name}
+                              onChange={(e) => updateUnitRow(i, { name: e.target.value })}
+                              placeholder="Eg: case, box, dozen..."
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Input
+                                type="number"
+                                min="0.0001"
+                                step="any"
+                                value={row.scale}
+                                onChange={(e) => updateUnitRow(i, { scale: e.target.value })}
+                              />
+                            </div>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              1 {row.name || "unit"} = {row.scale || "0"} {form.unit || "base"}
+                            </p>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              type="button"
+                              variant={row.is_default ? "default" : "outline"}
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setDefaultUnitRow(i)}
+                              aria-label="Set as default unit"
+                            >
+                              <Star className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => removeUnitRow(i)}
+                              aria-label="Remove unit"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Variant</p>
+                  <p className="text-xs text-muted-foreground">
+                    For items that come in a few versions sharing one name, e.g. "Jugo Juice" with "With Jelly" /
+                    "Without Jelly" — each variant keeps its own stock, price and SKU.
+                  </p>
+                </div>
+              </div>
+
+              <Select
+                value={form.variant_group_id ?? "none"}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    variant_group_id: v === "none" ? null : v,
+                    new_group_name: v === "__new__" ? f.new_group_name : "",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not a variant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not a variant</SelectItem>
+                  {variantGroupList.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">+ New group...</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {form.variant_group_id === "__new__" && (
+                <div className="space-y-1">
+                  <Label htmlFor="p-new-group">New group name</Label>
+                  <Input
+                    id="p-new-group"
+                    value={form.new_group_name}
+                    onChange={(e) => setForm((f) => ({ ...f, new_group_name: e.target.value }))}
+                    placeholder="Eg: Jugo Juice"
+                  />
+                  {errors.new_group_name && <p className="text-sm text-destructive">{errors.new_group_name}</p>}
+                </div>
+              )}
+
+              {form.variant_group_id && (
+                <div className="space-y-1">
+                  <Label htmlFor="p-variant-name">This variant's name</Label>
+                  <Input
+                    id="p-variant-name"
+                    value={form.variant_name}
+                    onChange={(e) => setForm((f) => ({ ...f, variant_name: e.target.value }))}
+                    placeholder="Eg: With Jelly"
+                  />
+                  {errors.variant_name && <p className="text-sm text-destructive">{errors.variant_name}</p>}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

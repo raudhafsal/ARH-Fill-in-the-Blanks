@@ -31,7 +31,12 @@ export function ProductCard({ product, onSelect }: { product: Product; onSelect:
         )}
       </div>
       <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
-        <p className="line-clamp-2 text-sm font-medium leading-snug">{product.name}</p>
+        <div>
+          <p className="line-clamp-2 text-sm font-medium leading-snug">{product.name}</p>
+          {product.variant_name && (
+            <p className="truncate text-xs text-muted-foreground">{product.variant_name}</p>
+          )}
+        </div>
         <p className="text-base font-semibold text-primary">{formatMVR(product.selling_price)}</p>
       </div>
     </button>

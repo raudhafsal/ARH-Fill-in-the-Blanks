@@ -63,6 +63,32 @@ export interface Product {
   track_inventory: boolean;
   tax_enabled: boolean;
   tax_rate: number;
+  variant_group_id: string | null;
+  variant_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** An additional sellable/purchasable unit for a product (e.g. "Case" = 100 pcs). `scale` is how many
+ * of the product's base unit (`products.unit`) make up 1 of this unit. */
+export interface ProductUnit {
+  id: string;
+  product_id: string;
+  name: string;
+  scale: number;
+  is_default: boolean;
+  created_at: string;
+}
+
+/** Groups variant products together for display (e.g. "Jugo Juice" grouping "With Jelly" / "Without Jelly").
+ * Each variant is its own row in `products` with its own stock/price/SKU, `variant_group_id` set to this id,
+ * and `variant_name` holding the distinguishing label. */
+export interface ProductVariantGroup {
+  id: string;
+  name: string;
+  category_id: string | null;
+  image_url: string | null;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -193,6 +219,9 @@ export interface PurchaseItem {
   quantity: number;
   cost_price: number;
   total_cost: number;
+  unit_name: string | null;
+  unit_scale: number;
+  entered_quantity: number | null;
 }
 
 export interface ExpenseCategory {
