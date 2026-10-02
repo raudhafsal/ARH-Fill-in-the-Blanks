@@ -60,6 +60,12 @@ export function Receipt({
           <span>Order type</span>
           <span className="capitalize">{data.orderType.replace("_", " ")}</span>
         </div>
+        {data.customerName && (
+          <div className="flex justify-between">
+            <span>Customer</span>
+            <span>{data.customerName}</span>
+          </div>
+        )}
         {data.syncStatus === "pending" && (
           <div className="flex justify-end">
             <Badge variant="warning" className="no-print">Pending Sync</Badge>

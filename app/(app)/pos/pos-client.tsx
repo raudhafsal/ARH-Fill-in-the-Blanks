@@ -15,6 +15,7 @@ import type {
   BusinessSettings,
   CashRegister,
   Category,
+  Customer,
   DiscountLimit,
   OrderType,
   PaymentMethod,
@@ -49,6 +50,7 @@ export function PosClient({
   taxSettings,
   businessSettings,
   discountLimit,
+  customers: initialCustomers,
 }: {
   profile: Profile;
   register: CashRegister;
@@ -58,8 +60,10 @@ export function PosClient({
   taxSettings: TaxSettings | null;
   businessSettings: BusinessSettings | null;
   discountLimit: DiscountLimit | null;
+  customers: Customer[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const online = useOnlineStatus();
 
   const tabCounterRef = useRef(1);
@@ -286,16 +290,23 @@ export function PosClient({
   const totals = computeCartTotals(cart, orderDiscount, taxSettings);
   const editingItem = cart.find((i) => i.lineId === editingLineId) ?? null;
 
-  async function handleConfirmPayment(payment: { paymentMethodId: string; amountReceived: number | null; changeAmount: number; reference: string | null }) {
+  async function handleConfirmPayment(payment: {
+    paymentMethodId: string;
+    amountReceived: number | null;
+    changeAmount: number;
+    reference: string | null;
+    customerId: string | null;
+  }) {
     setProcessingPayment(true);
     const tabId = activeTab.id;
     const clientTxnId = generateClientTxnId();
     const method = paymentMethods.find((m) => m.id === payment.paymentMethodId);
+    const customer = payment.customerId ? customers.find((c) => c.id === payment.customerId) ?? null : null;
 
     const payload: CompleteSalePayload = {
       p_client_txn_id: clientTxnId,
       p_order_type: orderType,
-      p_customer_id: null,
+      p_customer_id: payment.customerId,
       p_register_id: register.id,
       p_subtotal: totals.subtotal,
       p_discount_type: orderDiscount.type,
@@ -330,6 +341,7 @@ export function PosClient({
       createdAt: new Date().toISOString(),
       cashierName: profile.full_name,
       orderType,
+      customerName: customer?.full_name ?? null,
       notes: payload.p_notes,
       items: totals.lines.map((l) => ({
         productName: l.productName,
@@ -569,6 +581,8 @@ export function PosClient({
         onOpenChange={setPaymentDialogOpen}
         total={totals.total}
         paymentMethods={paymentMethods}
+        customers={customers}
+        onCustomerCreated={(c) => setCustomers((prev) => [...prev, c].sort((a, b) => a.full_name.localeCompare(b.full_name)))}
         processing={processingPayment}
         onConfirm={handleConfirmPayment}
       />

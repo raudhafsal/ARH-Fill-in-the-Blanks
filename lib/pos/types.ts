@@ -88,6 +88,7 @@ export interface ReceiptData {
   createdAt: string;
   cashierName: string;
   orderType: OrderType;
+  customerName: string | null;
   notes: string | null;
   items: {
     productName: string;

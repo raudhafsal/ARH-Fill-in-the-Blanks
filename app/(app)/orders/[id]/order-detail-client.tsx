@@ -138,6 +138,7 @@ export function OrderDetailClient({
     createdAt: order.created_at,
     cashierName: order.cashier?.full_name ?? "—",
     orderType: order.order_type as ReceiptData["orderType"],
+    customerName: order.customer?.full_name ?? null,
     notes: order.notes,
     items: order.order_items.map((i) => ({
       productName: i.product_name,

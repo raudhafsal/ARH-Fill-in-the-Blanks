@@ -23,7 +23,7 @@ export default async function PosPage() {
     redirect("/register");
   }
 
-  const [{ data: categories }, { data: products }, { data: paymentMethods }, { data: taxSettings }, { data: businessSettings }, { data: discountLimit }] =
+  const [{ data: categories }, { data: products }, { data: paymentMethods }, { data: taxSettings }, { data: businessSettings }, { data: discountLimit }, { data: customers }] =
     await Promise.all([
       supabase.from("categories").select("*").eq("active", true).order("display_order"),
       supabase.from("products").select("*").eq("active", true).order("name"),
@@ -31,6 +31,7 @@ export default async function PosPage() {
       supabase.from("tax_settings").select("*").maybeSingle(),
       supabase.from("business_settings").select("*").maybeSingle(),
       supabase.from("discount_limits").select("*").eq("role", profile.role).maybeSingle(),
+      supabase.from("customers").select("*").order("full_name"),
     ]);
 
   return (
@@ -43,6 +44,7 @@ export default async function PosPage() {
       taxSettings={taxSettings}
       businessSettings={businessSettings}
       discountLimit={discountLimit}
+      customers={customers ?? []}
     />
   );
 }

@@ -14,7 +14,7 @@ export default async function OrderReceiptPage({ params }: { params: { id: strin
     supabase
       .from("orders")
       .select(
-        "*, cashier:profiles!orders_cashier_id_fkey(full_name), order_items(*), payments(*, payment_method:payment_methods(name))"
+        "*, cashier:profiles!orders_cashier_id_fkey(full_name), customer:customers(full_name), order_items(*), payments(*, payment_method:payment_methods(name))"
       )
       .eq("id", params.id)
       .maybeSingle(),
@@ -29,6 +29,7 @@ export default async function OrderReceiptPage({ params }: { params: { id: strin
     createdAt: order.created_at,
     cashierName: (order as any).cashier?.full_name ?? "—",
     orderType: order.order_type,
+    customerName: (order as any).customer?.full_name ?? null,
     notes: order.notes,
     items: (order as any).order_items.map((i: any) => ({
       productName: i.product_name,
