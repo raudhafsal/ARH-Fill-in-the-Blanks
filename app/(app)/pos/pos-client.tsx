@@ -10,7 +10,7 @@ import { enqueueSale, retryAll } from "@/lib/pos/offline-queue";
 import { holdOrder, listHeldOrders, discardHeldOrder } from "@/lib/pos/held-orders";
 import { usePosKeyboardShortcuts } from "@/lib/pos/use-keyboard-shortcuts";
 import { useBarcodeScanner } from "@/lib/pos/use-barcode-scanner";
-import type { CartItem, CompleteSalePayload, HeldOrder, OrderDiscount, ReceiptData } from "@/lib/pos/types";
+import type { CartItem, CompleteSalePayload, HeldOrder, OrderTab, ReceiptData } from "@/lib/pos/types";
 import type {
   BusinessSettings,
   CashRegister,
@@ -61,10 +61,65 @@ export function PosClient({
   const supabase = useMemo(() => createClient(), []);
   const online = useOnlineStatus();
 
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [orderType, setOrderType] = useState<OrderType>(businessSettings?.default_order_type ?? "takeaway");
-  const [orderNotes, setOrderNotes] = useState("");
-  const [orderDiscount, setOrderDiscount] = useState<OrderDiscount>({ type: null, value: 0 });
+  const tabCounterRef = useRef(1);
+  function createTab(): OrderTab {
+    const n = tabCounterRef.current++;
+    return {
+      id: generateClientTxnId(),
+      label: `Order ${n}`,
+      cart: [],
+      orderType: businessSettings?.default_order_type ?? "takeaway",
+      orderNotes: "",
+      orderDiscount: { type: null, value: 0 },
+    };
+  }
+
+  const [tabs, setTabs] = useState<OrderTab[]>(() => [createTab()]);
+  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0].id);
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
+  const { cart, orderType, orderNotes, orderDiscount } = activeTab;
+
+  function updateTab(tabId: string, updater: (t: OrderTab) => OrderTab) {
+    setTabs((prev) => prev.map((t) => (t.id === tabId ? updater(t) : t)));
+  }
+
+  function patchActiveTab(patch: Partial<OrderTab>) {
+    updateTab(activeTabId, (t) => ({ ...t, ...patch }));
+  }
+
+  function updateCart(updater: (cart: CartItem[]) => CartItem[]) {
+    updateTab(activeTabId, (t) => ({ ...t, cart: updater(t.cart) }));
+  }
+
+  /** Adds a brand-new blank tab and switches to it (the "+" button). */
+  function addNewTab() {
+    const tab = createTab();
+    setTabs((prev) => [...prev, tab]);
+    setActiveTabId(tab.id);
+  }
+
+  /** Closes a tab (payment completed, held, or manually discarded). Always leaves at least one tab open. */
+  function closeTab(tabId: string) {
+    const remaining = tabs.filter((t) => t.id !== tabId);
+    if (remaining.length === 0) {
+      const fresh = createTab();
+      setTabs([fresh]);
+      setActiveTabId(fresh.id);
+      return;
+    }
+    setTabs(remaining);
+    if (tabId === activeTabId) {
+      setActiveTabId(remaining[0].id);
+    }
+  }
+
+  function handleCloseTab(tabId: string) {
+    const target = tabs.find((t) => t.id === tabId);
+    closeTab(tabId);
+    if (target && target.cart.length > 0) {
+      toast.message("Order discarded.");
+    }
+  }
 
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -130,7 +185,7 @@ export function PosClient({
       toast.error(`${product.name} is out of stock.`);
       return;
     }
-    setCart((prev) => {
+    updateCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id && !i.notes && !i.discountType);
       if (existing) {
         return prev.map((i) => (i.lineId === existing.lineId ? { ...i, quantity: i.quantity + 1 } : i));
@@ -167,40 +222,49 @@ export function PosClient({
 
   function updateQty(lineId: string, qty: number) {
     if (qty <= 0) {
-      setCart((prev) => prev.filter((i) => i.lineId !== lineId));
+      updateCart((prev) => prev.filter((i) => i.lineId !== lineId));
       return;
     }
-    setCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, quantity: qty } : i)));
+    updateCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, quantity: qty } : i)));
   }
 
   function removeItem(lineId: string) {
-    setCart((prev) => prev.filter((i) => i.lineId !== lineId));
+    updateCart((prev) => prev.filter((i) => i.lineId !== lineId));
   }
 
   function saveItemEdit(lineId: string, notes: string, discountType: CartItem["discountType"], discountValue: number) {
-    setCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, notes, discountType, discountValue } : i)));
-  }
-
-  function resetOrder() {
-    setCart([]);
-    setOrderNotes("");
-    setOrderDiscount({ type: null, value: 0 });
-    setOrderType(businessSettings?.default_order_type ?? "takeaway");
+    updateCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, notes, discountType, discountValue } : i)));
   }
 
   function handleHold() {
-    if (cart.length === 0) return;
-    holdOrder(profile.id, { cart, orderType, orderNotes, customerId: null, customerName: null, orderDiscount });
+    if (activeTab.cart.length === 0) return;
+    holdOrder(profile.id, {
+      cart: activeTab.cart,
+      orderType: activeTab.orderType,
+      orderNotes: activeTab.orderNotes,
+      customerId: null,
+      customerName: null,
+      orderDiscount: activeTab.orderDiscount,
+    });
     setHeldOrders(listHeldOrders(profile.id));
-    resetOrder();
+    closeTab(activeTab.id);
     toast.success("Order held. Resume it anytime from Held orders.");
   }
 
   function handleResumeHeld(order: HeldOrder) {
-    setCart(order.cart);
-    setOrderType(order.orderType);
-    setOrderNotes(order.orderNotes);
-    setOrderDiscount(order.orderDiscount);
+    const resumed: Partial<OrderTab> = {
+      cart: order.cart,
+      orderType: order.orderType,
+      orderNotes: order.orderNotes,
+      orderDiscount: order.orderDiscount,
+    };
+    if (activeTab.cart.length === 0) {
+      updateTab(activeTab.id, (t) => ({ ...t, ...resumed }));
+    } else {
+      const tab: OrderTab = { ...createTab(), ...resumed };
+      setTabs((prev) => [...prev, tab]);
+      setActiveTabId(tab.id);
+    }
     discardHeldOrder(profile.id, order.id);
     setHeldOrders(listHeldOrders(profile.id));
     setHeldDialogOpen(false);
@@ -213,9 +277,15 @@ export function PosClient({
 
   const totals = computeCartTotals(cart, orderDiscount, taxSettings);
   const editingItem = cart.find((i) => i.lineId === editingLineId) ?? null;
+  const tabSummaries = tabs.map((t) => ({
+    id: t.id,
+    label: t.label,
+    itemCount: t.cart.reduce((s, i) => s + i.quantity, 0),
+  }));
 
   async function handleConfirmPayment(payment: { paymentMethodId: string; amountReceived: number | null; changeAmount: number; reference: string | null }) {
     setProcessingPayment(true);
+    const tabId = activeTab.id;
     const clientTxnId = generateClientTxnId();
     const method = paymentMethods.find((m) => m.id === payment.paymentMethodId);
 
@@ -285,7 +355,7 @@ export function PosClient({
       setReceipt({ ...receiptData, orderNumber: orderNumber ?? "Pending sync", syncStatus });
       setReceiptOpen(true);
       setPaymentDialogOpen(false);
-      resetOrder();
+      closeTab(tabId);
       setProcessingPayment(false);
     }
 
@@ -371,19 +441,23 @@ export function PosClient({
         {/* Desktop cart, sticky on the right */}
         <div className="hidden w-[380px] shrink-0 border-l bg-card lg:block">
           <CartPanel
+            tabs={tabSummaries}
+            activeTabId={activeTabId}
+            onSelectTab={setActiveTabId}
+            onCloseTab={handleCloseTab}
+            onAddTab={addNewTab}
             cart={cart}
             totals={totals}
             orderType={orderType}
             dineInEnabled={!!businessSettings?.dine_in_enabled}
             orderNotes={orderNotes}
-            onOrderNotesChange={setOrderNotes}
-            onOrderTypeChange={setOrderType}
+            onOrderNotesChange={(v) => patchActiveTab({ orderNotes: v })}
+            onOrderTypeChange={(v) => patchActiveTab({ orderType: v })}
             onQtyChange={updateQty}
             onRemove={removeItem}
             onEditItem={setEditingLineId}
             onOpenDiscount={() => setDiscountDialogOpen(true)}
             onHold={handleHold}
-            onNewOrder={resetOrder}
             onPay={() => setPaymentDialogOpen(true)}
           />
         </div>
@@ -415,13 +489,18 @@ export function PosClient({
               </Button>
             </div>
             <CartPanel
+              tabs={tabSummaries}
+              activeTabId={activeTabId}
+              onSelectTab={setActiveTabId}
+              onCloseTab={handleCloseTab}
+              onAddTab={addNewTab}
               cart={cart}
               totals={totals}
               orderType={orderType}
               dineInEnabled={!!businessSettings?.dine_in_enabled}
               orderNotes={orderNotes}
-              onOrderNotesChange={setOrderNotes}
-              onOrderTypeChange={setOrderType}
+              onOrderNotesChange={(v) => patchActiveTab({ orderNotes: v })}
+              onOrderTypeChange={(v) => patchActiveTab({ orderType: v })}
               onQtyChange={updateQty}
               onRemove={removeItem}
               onEditItem={setEditingLineId}
@@ -430,7 +509,6 @@ export function PosClient({
                 handleHold();
                 setMobileCartOpen(false);
               }}
-              onNewOrder={resetOrder}
               onPay={() => setPaymentDialogOpen(true)}
               className="max-h-[80dvh]"
             />
@@ -451,7 +529,7 @@ export function PosClient({
         onOpenChange={setDiscountDialogOpen}
         value={orderDiscount}
         maxDiscountPercent={maxDiscountPercent}
-        onSave={setOrderDiscount}
+        onSave={(d) => patchActiveTab({ orderDiscount: d })}
       />
 
       <HeldOrdersDialog
