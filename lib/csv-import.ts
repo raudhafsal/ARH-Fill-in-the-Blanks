@@ -14,6 +14,9 @@ export interface ParsedVariantRow {
   costPrice: number;
   sellingPrice: number;
   imageUrl: string;
+  /** Set only when the group looks like pack sizes of one item (see detectPackGroup): how many of
+   *  the base row's units this row's price/cost works out to. 1 for the base row itself. */
+  suggestedScale?: number;
 }
 
 export interface ParsedOtherUnit {
@@ -35,6 +38,53 @@ export interface ParsedProductGroup {
   taxRate: number;
   rows: ParsedVariantRow[];
   isVariantGroup: boolean;
+  /** True when every row's price (and cost, where given) is a clean whole-number multiple of the
+   *  cheapest row's — e.g. "Single" 3.50 / "Packet" 35.00 is exactly 10x both in price and cost.
+   *  Ewity exports this as a Size/Color-style variant (Attr 1 Value), but that pattern almost
+   *  always means "the same item, sold in different pack sizes" rather than a genuine variant —
+   *  this is the "Wafer Chocolate" case the unit-scale POS fix was built for. The importer defaults
+   *  to importing these as ONE product with product_units instead of separate products, but shows
+   *  the detection so the cashier/owner can override it back to separate products if it's wrong. */
+  packDetected: boolean;
+  /** Index into `rows` of the cheapest row — becomes the product's base unit/stock when packDetected. */
+  packBaseRowIndex: number | null;
+}
+
+/**
+ * Looks for a clean whole-number price/cost ratio across every row relative to the cheapest one.
+ * Returns null unless ALL rows scale cleanly (tight tolerance, and the smallest ratio must be >=2)
+ * — genuine variants (different flavors/colors at similar or unrelated prices) essentially never
+ * pass this, so it stays a low false-positive signal.
+ */
+function detectPackGroup(rows: ParsedVariantRow[]): { baseIndex: number; scales: number[] } | null {
+  if (rows.length < 2) return null;
+  let baseIndex = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i].sellingPrice > 0 && (rows[baseIndex].sellingPrice <= 0 || rows[i].sellingPrice < rows[baseIndex].sellingPrice)) {
+      baseIndex = i;
+    }
+  }
+  const base = rows[baseIndex];
+  if (!base || base.sellingPrice <= 0) return null;
+
+  const scales: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i === baseIndex) {
+      scales.push(1);
+      continue;
+    }
+    const row = rows[i];
+    if (row.sellingPrice <= 0) return null;
+    const priceRatio = row.sellingPrice / base.sellingPrice;
+    const rounded = Math.round(priceRatio);
+    if (rounded < 2 || Math.abs(priceRatio - rounded) > 0.02 * rounded) return null;
+    if (base.costPrice > 0 && row.costPrice > 0) {
+      const costRatio = row.costPrice / base.costPrice;
+      if (Math.abs(costRatio - rounded) > 0.05 * rounded) return null;
+    }
+    scales.push(rounded);
+  }
+  return { baseIndex, scales };
 }
 
 export interface ParseResult {
@@ -133,6 +183,8 @@ function groupEwityRows(rows: RawRow[], fields: string[]): ParseResult {
         taxRate,
         rows: [],
         isVariantGroup: false,
+        packDetected: false,
+        packBaseRowIndex: null,
       };
       groups.push(current);
     }
@@ -163,6 +215,17 @@ function groupEwityRows(rows: RawRow[], fields: string[]): ParseResult {
     g.isVariantGroup = g.rows.length > 1 || g.rows.some((r) => r.attrValues.length > 0);
     if (g.rows.length === 0) {
       errors.push(`"${g.name}": no variant rows found.`);
+      continue;
+    }
+    if (g.isVariantGroup && g.rows.length > 1) {
+      const pack = detectPackGroup(g.rows);
+      if (pack) {
+        g.packDetected = true;
+        g.packBaseRowIndex = pack.baseIndex;
+        g.rows.forEach((r, i) => {
+          r.suggestedScale = pack.scales[i];
+        });
+      }
     }
   }
 

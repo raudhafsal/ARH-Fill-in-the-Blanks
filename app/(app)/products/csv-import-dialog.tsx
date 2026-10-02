@@ -6,9 +6,10 @@ import type { Category } from "@/types/database";
 import { parseEwityVariantCsv, parseEwityVariantXlsx, variantLabel, type ParseResult } from "@/lib/csv-import";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Upload, Loader2, AlertTriangle, CheckCircle2, XCircle, FileUp } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, CheckCircle2, XCircle, FileUp, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 import { formatMVR } from "@/lib/utils";
 
@@ -32,6 +33,10 @@ export function CsvImportDialog({
   const [result, setResult] = useState<ParseResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [groupResults, setGroupResults] = useState<GroupResult[] | null>(null);
+  /** Per-group override for groups where packDetected fired — true = import as ONE product with
+   *  pack-size units (shared stock), false = import as separate variant products. Defaults to
+   *  whatever was detected; the cashier/owner can flip it in the preview table. */
+  const [packOverrides, setPackOverrides] = useState<Record<number, boolean>>({});
 
   function reset() {
     setFileName(null);
@@ -39,7 +44,12 @@ export function CsvImportDialog({
     setGroupResults(null);
     setParsing(false);
     setImporting(false);
+    setPackOverrides({});
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function isPackMode(index: number, group: ParseResult["groups"][number]): boolean {
+    return packOverrides[index] ?? group.packDetected;
   }
 
   function handleClose(next: boolean) {
@@ -78,9 +88,19 @@ export function CsvImportDialog({
       )
     : [];
 
-  const totalProducts = result ? result.groups.reduce((s, g) => s + g.rows.length, 0) : 0;
-  const variantGroupCount = result ? result.groups.filter((g) => g.isVariantGroup).length : 0;
-  const simpleProductCount = result ? result.groups.filter((g) => !g.isVariantGroup).length : 0;
+  function groupIsPackMode(g: ParseResult["groups"][number], i: number): boolean {
+    return g.isVariantGroup && g.packBaseRowIndex !== null && isPackMode(i, g);
+  }
+
+  const totalProducts = result
+    ? result.groups.reduce((s, g, i) => s + (groupIsPackMode(g, i) ? 1 : g.rows.length), 0)
+    : 0;
+  const variantGroupCount = result
+    ? result.groups.filter((g, i) => g.isVariantGroup && !groupIsPackMode(g, i)).length
+    : 0;
+  const simpleProductCount = result
+    ? result.groups.filter((g, i) => !g.isVariantGroup || groupIsPackMode(g, i)).length
+    : 0;
 
   async function handleImport() {
     if (!result) return;
@@ -110,6 +130,7 @@ export function CsvImportDialog({
 
       try {
         let newProductIds: string[] = [];
+        const packMode = g.isVariantGroup && g.packBaseRowIndex !== null && isPackMode(i, g);
 
         if (!g.isVariantGroup) {
           const row = g.rows[0];
@@ -137,6 +158,53 @@ export function CsvImportDialog({
           if (error) throw error;
           newProductIds = [data.id as string];
           initialResults[i] = { name: g.name, status: "ok", created: 1 };
+        } else if (packMode) {
+          // Rows look like pack sizes of the same item (e.g. "Single" 3.50, "Packet" 35.00 — a
+          // clean 10x on both price and cost) rather than genuine variants — import as ONE product
+          // with the cheapest row as the base unit/stock, and the rest as product_units so the POS
+          // sells them as separate tiles sharing that one stock count, scaled appropriately.
+          const baseRow = g.rows[g.packBaseRowIndex as number];
+          const { data, error } = await supabase
+            .from("products")
+            .insert({
+              name: g.name,
+              sku: baseRow.sku || null,
+              barcode: baseRow.barcode || null,
+              category_id: categoryId,
+              description: g.description,
+              selling_price: baseRow.sellingPrice,
+              cost_price: baseRow.costPrice,
+              current_stock: baseRow.stock,
+              minimum_stock: 0,
+              unit: variantLabel(baseRow) || g.baseUnit,
+              image_url: baseRow.imageUrl || null,
+              active: true,
+              track_inventory: g.trackInventory,
+              tax_enabled: g.taxEnabled,
+              tax_rate: g.taxRate,
+            })
+            .select("id")
+            .single();
+          if (error) throw error;
+          newProductIds = [data.id as string];
+          initialResults[i] = { name: g.name, status: "ok", created: 1 };
+
+          const packUnitsPayload = g.rows
+            .map((row, ri) => ({ row, ri }))
+            .filter(({ ri }) => ri !== g.packBaseRowIndex)
+            .map(({ row }) => ({
+              product_id: data.id as string,
+              name: variantLabel(row) || `x${row.suggestedScale ?? 1}`,
+              scale: row.suggestedScale ?? 1,
+              is_default: false,
+              price: row.sellingPrice || null,
+            }));
+          if (packUnitsPayload.length > 0) {
+            const { error: packUnitsError } = await supabase.from("product_units").insert(packUnitsPayload);
+            if (packUnitsError) {
+              initialResults[i].detail = "Product was created, but its pack-size units couldn't be saved.";
+            }
+          }
         } else {
           const { data: groupData, error: groupError } = await supabase
             .from("product_variant_groups")
@@ -296,6 +364,46 @@ export function CsvImportDialog({
                         </div>
                       )}
 
+                      {result.groups.some((g) => g.packDetected) && (
+                        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                          <p className="flex items-center gap-1.5 text-sm font-medium">
+                            <PackageOpen className="h-4 w-4" />
+                            Pack sizes detected
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            These look like the same item sold in different pack sizes (price and cost scale cleanly),
+                            not separate variants — e.g. a "Packet" priced at exactly 10x a "Single". By default they're
+                            imported as ONE product that shares a single stock count, scaled per pack, the same way the
+                            POS already handles units. Turn a switch off to import it as separate products instead.
+                          </p>
+                          <div className="space-y-1.5">
+                            {result.groups.map((g, i) => {
+                              if (!g.packDetected || g.packBaseRowIndex === null) return null;
+                              const baseRow = g.rows[g.packBaseRowIndex];
+                              const others = g.rows.filter((_, ri) => ri !== g.packBaseRowIndex);
+                              return (
+                                <div key={i} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{g.name}</p>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                      {variantLabel(baseRow) || "base"} = 1 ·{" "}
+                                      {others.map((r) => `${variantLabel(r) || "unit"} = ${r.suggestedScale}x`).join(", ")}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">{isPackMode(i, g) ? "Shared stock" : "Separate products"}</span>
+                                    <Switch
+                                      checked={isPackMode(i, g)}
+                                      onCheckedChange={(v) => setPackOverrides((prev) => ({ ...prev, [i]: v }))}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {result.warnings.length > 0 && (
                         <div className="space-y-1 rounded-lg border border-warning/40 bg-warning/5 p-3">
                           <p className="flex items-center gap-1.5 text-sm font-medium">
@@ -325,10 +433,17 @@ export function CsvImportDialog({
                               const prices = g.rows.map((r) => r.sellingPrice);
                               const min = Math.min(...prices);
                               const max = Math.max(...prices);
+                              const packMode = g.isVariantGroup && g.packBaseRowIndex !== null && isPackMode(i, g);
                               return (
                                 <TableRow key={i}>
                                   <TableCell className="font-medium">{g.name}</TableCell>
-                                  <TableCell>{g.isVariantGroup ? `${g.rows.length} variants` : "—"}</TableCell>
+                                  <TableCell>
+                                    {packMode
+                                      ? `${g.rows.length} pack sizes (1 product)`
+                                      : g.isVariantGroup
+                                        ? `${g.rows.length} variants`
+                                        : "—"}
+                                  </TableCell>
                                   <TableCell className="text-muted-foreground">{g.categoryName ?? "—"}</TableCell>
                                   <TableCell className="text-right">
                                     {min === max ? formatMVR(min) : `${formatMVR(min)} – ${formatMVR(max)}`}
