@@ -15,6 +15,17 @@ import { formatMVR } from "@/lib/utils";
 
 type GroupResult = { name: string; status: "pending" | "ok" | "error"; detail?: string; created: number };
 
+/** Supabase/PostgREST errors are plain objects with a `message` field, not `Error` instances —
+ *  `err instanceof Error` was silently swallowing every real reason (duplicate SKU, RLS, bad
+ *  column) behind a generic "Unknown error". This pulls the message out regardless of shape. */
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  return "Unknown error";
+}
+
 export function CsvImportDialog({
   open,
   onOpenChange,
@@ -253,7 +264,7 @@ export function CsvImportDialog({
           }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
+        const message = extractErrorMessage(err);
         initialResults[i] = {
           name: g.name,
           status: "error",
