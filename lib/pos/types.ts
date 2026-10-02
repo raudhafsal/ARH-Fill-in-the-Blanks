@@ -110,6 +110,16 @@ export interface ReceiptData {
   syncStatus?: "synced" | "pending" | "failed";
 }
 
+/** One in-progress order kept open in the POS screen; cashiers can switch between several at once. */
+export interface OrderTab {
+  id: string;
+  label: string;
+  cart: CartItem[];
+  orderType: OrderType;
+  orderNotes: string;
+  orderDiscount: OrderDiscount;
+}
+
 export interface HeldOrder {
   id: string;
   heldAt: string;
