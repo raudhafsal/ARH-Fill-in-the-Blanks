@@ -7,20 +7,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { formatMVR, cn } from "@/lib/utils";
 import type { CartItem, CartTotals } from "@/lib/pos/types";
 import type { OrderType } from "@/types/database";
-import { Minus, Plus, Trash2, Pencil, Percent, PauseCircle, X } from "lucide-react";
-
-export interface CartTabSummary {
-  id: string;
-  label: string;
-  itemCount: number;
-}
+import { Minus, Plus, Trash2, Pencil, Percent, PauseCircle, LayoutList } from "lucide-react";
 
 export function CartPanel({
-  tabs,
-  activeTabId,
-  onSelectTab,
-  onCloseTab,
-  onAddTab,
+  activeLabel,
+  openOrderCount,
+  onOpenOrders,
   cart,
   totals,
   orderType,
@@ -36,11 +28,9 @@ export function CartPanel({
   onPay,
   className,
 }: {
-  tabs: CartTabSummary[];
-  activeTabId: string;
-  onSelectTab: (id: string) => void;
-  onCloseTab: (id: string) => void;
-  onAddTab: () => void;
+  activeLabel: string;
+  openOrderCount: number;
+  onOpenOrders: () => void;
   cart: CartItem[];
   totals: CartTotals;
   orderType: OrderType;
@@ -58,36 +48,11 @@ export function CartPanel({
 }) {
   return (
     <div className={cn("flex h-full flex-col", className)}>
-      <div className="flex items-center gap-1 overflow-x-auto border-b p-2">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onSelectTab(t.id)}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-              t.id === activeTabId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"
-            )}
-          >
-            <span>{t.label}</span>
-            {t.itemCount > 0 && (
-              <span className={cn("rounded-full px-1.5", t.id === activeTabId ? "bg-black/15" : "bg-background")}>{t.itemCount}</span>
-            )}
-            <span
-              role="button"
-              aria-label={`Close ${t.label}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseTab(t.id);
-              }}
-              className="rounded p-0.5 hover:bg-black/15"
-            >
-              <X className="h-3 w-3" />
-            </span>
-          </button>
-        ))}
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onAddTab} aria-label="New order">
-          <Plus className="h-3.5 w-3.5" />
+      <div className="flex items-center justify-between gap-2 border-b p-3">
+        <p className="truncate text-sm font-semibold">{activeLabel}</p>
+        <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={onOpenOrders}>
+          <LayoutList className="h-3.5 w-3.5" />
+          Orders{openOrderCount > 1 ? ` (${openOrderCount})` : ""}
         </Button>
       </div>
 

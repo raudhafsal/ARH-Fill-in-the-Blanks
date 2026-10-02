@@ -114,6 +114,7 @@ export interface ReceiptData {
 export interface OrderTab {
   id: string;
   label: string;
+  openedAt: string;
   cart: CartItem[];
   orderType: OrderType;
   orderNotes: string;

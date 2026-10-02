@@ -29,6 +29,7 @@ import { CartPanel } from "@/components/pos/cart-panel";
 import { CartItemEditDialog } from "@/components/pos/cart-item-edit-dialog";
 import { OrderDiscountDialog } from "@/components/pos/order-discount-dialog";
 import { HeldOrdersDialog } from "@/components/pos/held-orders-dialog";
+import { OpenOrdersDialog } from "@/components/pos/open-orders-dialog";
 import { PaymentDialog } from "@/components/pos/payment-dialog";
 import { BarcodeInput } from "@/components/pos/barcode-input";
 import { RegisterStatusBar } from "@/components/pos/register-status-bar";
@@ -67,6 +68,7 @@ export function PosClient({
     return {
       id: generateClientTxnId(),
       label: `Order ${n}`,
+      openedAt: new Date().toISOString(),
       cart: [],
       orderType: businessSettings?.default_order_type ?? "takeaway",
       orderNotes: "",
@@ -128,6 +130,7 @@ export function PosClient({
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [heldDialogOpen, setHeldDialogOpen] = useState(false);
+  const [ordersDialogOpen, setOrdersDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -277,11 +280,6 @@ export function PosClient({
 
   const totals = computeCartTotals(cart, orderDiscount, taxSettings);
   const editingItem = cart.find((i) => i.lineId === editingLineId) ?? null;
-  const tabSummaries = tabs.map((t) => ({
-    id: t.id,
-    label: t.label,
-    itemCount: t.cart.reduce((s, i) => s + i.quantity, 0),
-  }));
 
   async function handleConfirmPayment(payment: { paymentMethodId: string; amountReceived: number | null; changeAmount: number; reference: string | null }) {
     setProcessingPayment(true);
@@ -398,6 +396,7 @@ export function PosClient({
       if (paymentDialogOpen) setPaymentDialogOpen(false);
       else if (discountDialogOpen) setDiscountDialogOpen(false);
       else if (heldDialogOpen) setHeldDialogOpen(false);
+      else if (ordersDialogOpen) setOrdersDialogOpen(false);
       else if (editingLineId) setEditingLineId(null);
       else if (mobileCartOpen) setMobileCartOpen(false);
     },
@@ -441,11 +440,9 @@ export function PosClient({
         {/* Desktop cart, sticky on the right */}
         <div className="hidden w-[380px] shrink-0 border-l bg-card lg:block">
           <CartPanel
-            tabs={tabSummaries}
-            activeTabId={activeTabId}
-            onSelectTab={setActiveTabId}
-            onCloseTab={handleCloseTab}
-            onAddTab={addNewTab}
+            activeLabel={activeTab.label}
+            openOrderCount={tabs.length}
+            onOpenOrders={() => setOrdersDialogOpen(true)}
             cart={cart}
             totals={totals}
             orderType={orderType}
@@ -489,11 +486,9 @@ export function PosClient({
               </Button>
             </div>
             <CartPanel
-              tabs={tabSummaries}
-              activeTabId={activeTabId}
-              onSelectTab={setActiveTabId}
-              onCloseTab={handleCloseTab}
-              onAddTab={addNewTab}
+              activeLabel={activeTab.label}
+              openOrderCount={tabs.length}
+              onOpenOrders={() => setOrdersDialogOpen(true)}
               cart={cart}
               totals={totals}
               orderType={orderType}
@@ -539,6 +534,17 @@ export function PosClient({
         taxSettings={taxSettings}
         onResume={handleResumeHeld}
         onDiscard={handleDiscardHeld}
+      />
+
+      <OpenOrdersDialog
+        open={ordersDialogOpen}
+        onOpenChange={setOrdersDialogOpen}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        taxSettings={taxSettings}
+        onSelect={setActiveTabId}
+        onClose={handleCloseTab}
+        onAddNew={addNewTab}
       />
 
       <PaymentDialog
