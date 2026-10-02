@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Category } from "@/types/database";
-import { parseEwityVariantCsv, variantLabel, type ParseResult } from "@/lib/csv-import";
+import { parseEwityVariantCsv, parseEwityVariantXlsx, variantLabel, type ParseResult } from "@/lib/csv-import";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -54,11 +54,13 @@ export function CsvImportDialog({
     setResult(null);
     setGroupResults(null);
     try {
-      const text = await file.text();
-      const parsed = parseEwityVariantCsv(text);
+      const isExcel = /\.xlsx?$/i.test(file.name) || file.type.includes("spreadsheet") || file.type.includes("excel");
+      const parsed = isExcel
+        ? await parseEwityVariantXlsx(await file.arrayBuffer())
+        : parseEwityVariantCsv(await file.text());
       setResult(parsed);
     } catch {
-      toast.error("Couldn't read that file. Make sure it's a CSV export.");
+      toast.error("Couldn't read that file. Make sure it's a CSV or Excel export from Ewity.");
       setFileName(null);
     } finally {
       setParsing(false);
@@ -218,7 +220,7 @@ export function CsvImportDialog({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -227,8 +229,9 @@ export function CsvImportDialog({
                 />
                 <FileUp className="mx-auto h-6 w-6 text-muted-foreground" />
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Upload an Ewity "Import Variant Products" CSV export (products with Size/Color-style
-                  variants, each with its own price and stock).
+                  Upload an Ewity "Import Variant Products" export — CSV or Excel (.xlsx), either the
+                  filled-in template or a straight download — products with Size/Color-style variants,
+                  each with its own price and stock.
                 </p>
                 <Button
                   type="button"
@@ -239,7 +242,7 @@ export function CsvImportDialog({
                   disabled={parsing}
                 >
                   {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {fileName ?? "Choose CSV file"}
+                  {fileName ?? "Choose file"}
                 </Button>
               </div>
 
@@ -251,11 +254,14 @@ export function CsvImportDialog({
                         <XCircle className="h-4 w-4" />
                         This file has problems
                       </p>
-                      {result.errors.map((e, i) => (
+                      {result.errors.slice(0, 8).map((e, i) => (
                         <p key={i} className="text-xs text-destructive">
                           {e}
                         </p>
                       ))}
+                      {result.errors.length > 8 && (
+                        <p className="text-xs text-destructive">+ {result.errors.length - 8} more</p>
+                      )}
                     </div>
                   )}
 
