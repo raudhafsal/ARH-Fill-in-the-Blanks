@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { formatMVR, generateClientTxnId } from "@/lib/utils";
+import { formatMVR, generateClientTxnId, round2 } from "@/lib/utils";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { computeCartTotals } from "@/lib/pos/cart-math";
 import { enqueueSale, retryAll } from "@/lib/pos/offline-queue";
 import { holdOrder, listHeldOrders, discardHeldOrder } from "@/lib/pos/held-orders";
 import { usePosKeyboardShortcuts } from "@/lib/pos/use-keyboard-shortcuts";
 import { useBarcodeScanner } from "@/lib/pos/use-barcode-scanner";
-import type { CartItem, CompleteSalePayload, HeldOrder, OrderTab, ReceiptData } from "@/lib/pos/types";
+import type { CartItem, CompleteSalePayload, HeldOrder, OrderTab, ReceiptData, SellableItem } from "@/lib/pos/types";
 import type {
   BusinessSettings,
   CashRegister,
@@ -20,6 +20,7 @@ import type {
   OrderType,
   PaymentMethod,
   Product,
+  ProductUnit,
   Profile,
   TaxSettings,
 } from "@/types/database";
@@ -46,6 +47,7 @@ export function PosClient({
   register,
   categories,
   products,
+  productUnits,
   paymentMethods,
   taxSettings,
   businessSettings,
@@ -56,6 +58,7 @@ export function PosClient({
   register: CashRegister;
   categories: Category[];
   products: Product[];
+  productUnits: ProductUnit[];
   paymentMethods: PaymentMethod[];
   taxSettings: TaxSettings | null;
   businessSettings: BusinessSettings | null;
@@ -187,18 +190,74 @@ export function PosClient({
     });
   }, [products, activeCategory, search]);
 
+  // A product with extra units (product_units) gets one POS tile per unit — Ewity-style
+  // ("Wafer Chocolate / Single", "Wafer Chocolate / Pkt") — all sharing the same base stock.
+  const unitsByProduct = useMemo(() => {
+    const m = new Map<string, ProductUnit[]>();
+    for (const u of productUnits) {
+      const arr = m.get(u.product_id) ?? [];
+      arr.push(u);
+      m.set(u.product_id, arr);
+    }
+    return m;
+  }, [productUnits]);
+
+  function sellableItemsFor(product: Product): SellableItem[] {
+    const units = unitsByProduct.get(product.id) ?? [];
+    const base: SellableItem = {
+      key: product.id,
+      product,
+      unitId: null,
+      unitName: product.unit,
+      unitScale: 1,
+      price: product.selling_price,
+    };
+    if (units.length === 0) return [base];
+    return [
+      base,
+      ...units.map((u) => ({
+        key: `${product.id}:${u.id}`,
+        product,
+        unitId: u.id,
+        unitName: u.name,
+        unitScale: u.scale,
+        price: u.price ?? round2(product.selling_price * u.scale),
+      })),
+    ];
+  }
+
+  const sellableTiles = useMemo(
+    () => filteredProducts.flatMap(sellableItemsFor),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredProducts, unitsByProduct]
+  );
+
+  /** Total base units of this product already sitting in the cart (across all its unit tiles). */
+  function baseUnitsInCart(productId: string, excludeLineId?: string): number {
+    return cart.reduce(
+      (sum, i) => (i.productId === productId && i.lineId !== excludeLineId ? sum + i.quantity * i.unitScale : sum),
+      0
+    );
+  }
+
   // Tile home screen (Ewity-style): categories as tiles until one is picked, or the cashier searches.
   const showCategoryHome = !activeCategory && !search;
   const activeCategoryName =
     activeCategory === ALL_ITEMS_ID ? "All items" : categories.find((c) => c.id === activeCategory)?.name ?? null;
 
-  function addToCart(product: Product) {
-    if (product.track_inventory && product.current_stock <= 0) {
-      toast.error(`${product.name} is out of stock.`);
-      return;
+  function addToCart(item: SellableItem) {
+    const { product } = item;
+    if (product.track_inventory) {
+      const already = baseUnitsInCart(product.id);
+      if (already + item.unitScale > product.current_stock) {
+        toast.error(`Not enough stock of ${product.name} left.`);
+        return;
+      }
     }
     updateCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id && !i.notes && !i.discountType);
+      const existing = prev.find(
+        (i) => i.productId === product.id && i.unitName === item.unitName && i.unitScale === item.unitScale && !i.notes && !i.discountType
+      );
       if (existing) {
         return prev.map((i) => (i.lineId === existing.lineId ? { ...i, quantity: i.quantity + 1 } : i));
       }
@@ -208,13 +267,15 @@ export function PosClient({
           lineId: generateClientTxnId(),
           productId: product.id,
           productName: product.name,
-          unitPrice: product.selling_price,
+          unitPrice: item.price,
           quantity: 1,
           notes: "",
           discountType: null,
           discountValue: 0,
           taxEnabled: product.tax_enabled,
           taxRate: product.tax_rate,
+          unitName: item.unitId ? item.unitName : null,
+          unitScale: item.unitScale,
         },
       ];
     });
@@ -226,7 +287,7 @@ export function PosClient({
       toast.error(`Product not found for barcode "${code}".`);
       return;
     }
-    addToCart(product);
+    addToCart({ key: product.id, product, unitId: null, unitName: product.unit, unitScale: 1, price: product.selling_price });
     toast.success(`Added ${product.name}`);
   }
 
@@ -236,6 +297,17 @@ export function PosClient({
     if (qty <= 0) {
       updateCart((prev) => prev.filter((i) => i.lineId !== lineId));
       return;
+    }
+    const line = cart.find((i) => i.lineId === lineId);
+    if (line) {
+      const product = products.find((p) => p.id === line.productId);
+      if (product?.track_inventory) {
+        const others = baseUnitsInCart(product.id, lineId);
+        if (others + qty * line.unitScale > product.current_stock) {
+          toast.error(`Not enough stock of ${product.name} for that quantity.`);
+          return;
+        }
+      }
     }
     updateCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, quantity: qty } : i)));
   }
@@ -324,6 +396,8 @@ export function PosClient({
         tax_amount: l.taxAmount,
         line_total: l.lineTotal,
         notes: l.notes,
+        unit_name: l.unitName,
+        unit_scale: l.unitScale,
       })),
       p_payments: [
         {
@@ -349,6 +423,7 @@ export function PosClient({
         unitPrice: l.unitPrice,
         itemDiscountAmount: l.itemDiscountAmount,
         lineTotal: l.lineTotal,
+        unitName: l.unitName,
       })),
       subtotal: totals.subtotal,
       discountAmount: totals.discountAmount,
@@ -460,7 +535,7 @@ export function PosClient({
                     {activeCategoryName && <span className="text-sm font-medium">{activeCategoryName}</span>}
                   </div>
                 )}
-                <ProductGrid products={filteredProducts} onSelect={addToCart} />
+                <ProductGrid items={sellableTiles} onSelect={addToCart} />
               </div>
             )}
           </div>

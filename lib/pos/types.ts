@@ -1,4 +1,17 @@
-import type { DiscountKind, OrderType } from "@/types/database";
+import type { DiscountKind, OrderType, Product } from "@/types/database";
+
+/** One tappable POS tile: a product sold in a particular unit. Most products have exactly one
+ *  (their base unit, unitId null); a product with `product_units` rows gets one tile per unit,
+ *  Ewity-style ("Wafer Chocolate / Single", "Wafer Chocolate / Pkt") — all sharing the same
+ *  underlying `product.current_stock`, scaled by `unitScale`. */
+export interface SellableItem {
+  key: string;
+  product: Product;
+  unitId: string | null;
+  unitName: string;
+  unitScale: number;
+  price: number;
+}
 
 /** A line in the in-progress cart (client-side only, before a sale is completed). */
 export interface CartItem {
@@ -13,6 +26,11 @@ export interface CartItem {
   discountValue: number; // percent (0-100) when discountType === 'percentage', else an MVR amount
   taxEnabled: boolean;
   taxRate: number;
+  /** The unit this line was sold in (e.g. "Pkt"), or null for the product's own base unit. */
+  unitName: string | null;
+  /** How many base units make up 1 of `quantity` (e.g. 12 for a "Pkt" of 12). Stock is
+   *  deducted as quantity * unitScale so a pack sale still reduces the shared base stock. */
+  unitScale: number;
 }
 
 /** A computed line, ready to send to the complete_sale RPC. */
@@ -25,6 +43,8 @@ export interface ComputedLine {
   taxAmount: number;
   lineTotal: number;
   notes: string | null;
+  unitName: string | null;
+  unitScale: number;
 }
 
 export interface CartTotals {
@@ -72,6 +92,8 @@ export interface CompleteSalePayload {
     tax_amount: number;
     line_total: number;
     notes: string | null;
+    unit_name: string | null;
+    unit_scale: number;
   }[];
   p_payments: {
     payment_method_id: string;
@@ -96,6 +118,7 @@ export interface ReceiptData {
     unitPrice: number;
     itemDiscountAmount: number;
     lineTotal: number;
+    unitName?: string | null;
   }[];
   subtotal: number;
   discountAmount: number;

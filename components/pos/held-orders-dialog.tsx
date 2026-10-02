@@ -52,6 +52,7 @@ export function HeldOrdersDialog({
                     {order.cart.slice(0, 4).map((item) => (
                       <li key={item.lineId}>
                         {item.quantity}× {item.productName}
+                        {item.unitName ? ` / ${item.unitName}` : ""}
                       </li>
                     ))}
                     {order.cart.length > 4 && <li>+{order.cart.length - 4} more…</li>}

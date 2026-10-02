@@ -77,6 +77,9 @@ export interface ProductUnit {
   name: string;
   scale: number;
   is_default: boolean;
+  /** Custom sell price for this unit (e.g. a "Pkt" of 12 priced below 12x the single price).
+   *  Null means "compute as product.selling_price * scale". */
+  price: number | null;
   created_at: string;
 }
 
@@ -181,6 +184,10 @@ export interface OrderItem {
   tax_amount: number;
   line_total: number;
   notes: string | null;
+  /** The product_units.name sold under, or null for the product's base unit. */
+  unit_name: string | null;
+  /** How many base units make up 1 of `quantity` above (e.g. 12 for a "Pkt" of 12). */
+  unit_scale: number;
   created_at: string;
 }
 

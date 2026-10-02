@@ -80,6 +80,8 @@ export function computeCartTotals(
       taxAmount: lineTax,
       lineTotal,
       notes: item.notes || null,
+      unitName: item.unitName,
+      unitScale: item.unitScale,
     });
   });
 

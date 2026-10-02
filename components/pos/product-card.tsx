@@ -2,17 +2,19 @@
 
 import Image from "next/image";
 import { cn, formatMVR } from "@/lib/utils";
-import type { Product } from "@/types/database";
+import type { SellableItem } from "@/lib/pos/types";
 import { Package } from "lucide-react";
 
-export function ProductCard({ product, onSelect }: { product: Product; onSelect: (product: Product) => void }) {
-  const outOfStock = product.track_inventory && product.current_stock <= 0;
+export function ProductCard({ item, onSelect }: { item: SellableItem; onSelect: (item: SellableItem) => void }) {
+  const { product } = item;
+  const outOfStock = product.track_inventory && product.current_stock < item.unitScale;
+  const displayName = item.unitId ? `${product.name} / ${item.unitName}` : product.name;
 
   return (
     <button
       type="button"
       disabled={outOfStock}
-      onClick={() => onSelect(product)}
+      onClick={() => onSelect(item)}
       className={cn(
         "pos-tap flex h-full flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm transition-transform active:scale-[0.98]",
         outOfStock ? "cursor-not-allowed opacity-50" : "hover:border-primary/50 hover:shadow-md"
@@ -32,12 +34,12 @@ export function ProductCard({ product, onSelect }: { product: Product; onSelect:
       </div>
       <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
         <div>
-          <p className="line-clamp-2 text-sm font-medium leading-snug">{product.name}</p>
+          <p className="line-clamp-2 text-sm font-medium leading-snug">{displayName}</p>
           {product.variant_name && (
             <p className="truncate text-xs text-muted-foreground">{product.variant_name}</p>
           )}
         </div>
-        <p className="text-base font-semibold text-primary">{formatMVR(product.selling_price)}</p>
+        <p className="text-base font-semibold text-primary">{formatMVR(item.price)}</p>
       </div>
     </button>
   );

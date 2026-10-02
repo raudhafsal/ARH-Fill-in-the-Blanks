@@ -23,16 +23,25 @@ export default async function PosPage() {
     redirect("/register");
   }
 
-  const [{ data: categories }, { data: products }, { data: paymentMethods }, { data: taxSettings }, { data: businessSettings }, { data: discountLimit }, { data: customers }] =
-    await Promise.all([
-      supabase.from("categories").select("*").eq("active", true).order("display_order"),
-      supabase.from("products").select("*").eq("active", true).order("name"),
-      supabase.from("payment_methods").select("*").eq("enabled", true).order("display_order"),
-      supabase.from("tax_settings").select("*").maybeSingle(),
-      supabase.from("business_settings").select("*").maybeSingle(),
-      supabase.from("discount_limits").select("*").eq("role", profile.role).maybeSingle(),
-      supabase.from("customers").select("*").order("full_name"),
-    ]);
+  const [
+    { data: categories },
+    { data: products },
+    { data: productUnits },
+    { data: paymentMethods },
+    { data: taxSettings },
+    { data: businessSettings },
+    { data: discountLimit },
+    { data: customers },
+  ] = await Promise.all([
+    supabase.from("categories").select("*").eq("active", true).order("display_order"),
+    supabase.from("products").select("*").eq("active", true).order("name"),
+    supabase.from("product_units").select("*"),
+    supabase.from("payment_methods").select("*").eq("enabled", true).order("display_order"),
+    supabase.from("tax_settings").select("*").maybeSingle(),
+    supabase.from("business_settings").select("*").maybeSingle(),
+    supabase.from("discount_limits").select("*").eq("role", profile.role).maybeSingle(),
+    supabase.from("customers").select("*").order("full_name"),
+  ]);
 
   return (
     <PosClient
@@ -40,6 +49,7 @@ export default async function PosPage() {
       register={openRegister}
       categories={categories ?? []}
       products={products ?? []}
+      productUnits={productUnits ?? []}
       paymentMethods={paymentMethods ?? []}
       taxSettings={taxSettings}
       businessSettings={businessSettings}

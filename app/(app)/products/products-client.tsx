@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
+import { round2 } from "@/lib/utils";
 import type { Product, Category, RecipeItem, ProductUnit, ProductVariantGroup } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -103,6 +104,8 @@ interface UnitRow {
   name: string;
   scale: string;
   is_default: boolean;
+  /** Blank = auto (base selling price × scale). The price this unit sells for in the POS. */
+  price: string;
 }
 
 const quickCategorySchema = z.object({
@@ -166,7 +169,7 @@ export function ProductsClient({
   const variantGroupMap = useMemo(() => new Map(variantGroupList.map((g) => [g.id, g.name])), [variantGroupList]);
 
   function addUnitRow() {
-    setUnitRows((rows) => [...rows, { name: "", scale: "1", is_default: false }]);
+    setUnitRows((rows) => [...rows, { name: "", scale: "1", is_default: false, price: "" }]);
   }
 
   function updateUnitRow(index: number, patch: Partial<UnitRow>) {
@@ -267,6 +270,7 @@ export function ProductsClient({
           name: u.name,
           scale: String(u.scale),
           is_default: u.is_default,
+          price: u.price != null ? String(u.price) : "",
         }))
       );
     } finally {
@@ -302,6 +306,7 @@ export function ProductsClient({
           name: r.name.trim(),
           scale: Number(r.scale),
           is_default: r.is_default,
+          price: r.price.trim() ? Number(r.price) : null,
         }))
       );
       if (insError) throw insError;
@@ -843,6 +848,7 @@ export function ProductsClient({
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead className="w-28">Scale</TableHead>
+                      <TableHead className="w-28">Sell price</TableHead>
                       <TableHead className="w-20">Default</TableHead>
                       <TableHead className="w-10" />
                     </TableRow>
@@ -851,6 +857,7 @@ export function ProductsClient({
                     <TableRow>
                       <TableCell className="font-medium">{form.unit || "Base unit"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">1 (base)</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{form.selling_price || "0.00"}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
                           Base unit
@@ -860,7 +867,7 @@ export function ProductsClient({
                     </TableRow>
                     {unitsLoading ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="py-3 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={5} className="py-3 text-center text-sm text-muted-foreground">
                           Loading units...
                         </TableCell>
                       </TableRow>
@@ -887,6 +894,16 @@ export function ProductsClient({
                             <p className="mt-1 text-[11px] text-muted-foreground">
                               1 {row.name || "unit"} = {row.scale || "0"} {form.unit || "base"}
                             </p>
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.price}
+                              onChange={(e) => updateUnitRow(i, { price: e.target.value })}
+                              placeholder={round2(Number(form.selling_price || 0) * Number(row.scale || 0)).toFixed(2)}
+                            />
                           </TableCell>
                           <TableCell>
                             <Button

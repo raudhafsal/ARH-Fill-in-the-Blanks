@@ -29,6 +29,8 @@ interface OrderItemRow {
   tax_amount: number;
   line_total: number;
   notes: string | null;
+  unit_name: string | null;
+  unit_scale: number;
 }
 
 interface OrderFull {
@@ -146,6 +148,7 @@ export function OrderDetailClient({
       unitPrice: i.unit_price,
       itemDiscountAmount: i.item_discount_amount,
       lineTotal: i.line_total,
+      unitName: i.unit_name,
     })),
     subtotal: order.subtotal,
     discountAmount: order.discount_amount,
@@ -218,7 +221,10 @@ export function OrderDetailClient({
                 {order.order_items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      <p className="font-medium">{item.product_name}</p>
+                      <p className="font-medium">
+                        {item.product_name}
+                        {item.unit_name && <span className="font-normal text-muted-foreground"> / {item.unit_name}</span>}
+                      </p>
                       {item.notes && <p className="text-xs italic text-muted-foreground">“{item.notes}”</p>}
                     </TableCell>
                     <TableCell className="text-right">{item.quantity}</TableCell>

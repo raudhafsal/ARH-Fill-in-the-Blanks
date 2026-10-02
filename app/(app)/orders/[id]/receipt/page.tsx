@@ -37,6 +37,7 @@ export default async function OrderReceiptPage({ params }: { params: { id: strin
       unitPrice: i.unit_price,
       itemDiscountAmount: i.item_discount_amount,
       lineTotal: i.line_total,
+      unitName: i.unit_name,
     })),
     subtotal: order.subtotal,
     discountAmount: order.discount_amount,

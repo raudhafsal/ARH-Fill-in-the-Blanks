@@ -87,7 +87,10 @@ export function Receipt({
         <tbody>
           {data.items.map((item, idx) => (
             <tr key={idx} className="align-top">
-              <td className="py-0.5 pr-1">{item.productName}</td>
+              <td className="py-0.5 pr-1">
+                {item.productName}
+                {item.unitName && <span className="text-muted-foreground"> / {item.unitName}</span>}
+              </td>
               <td className="py-0.5 text-right">{item.quantity}</td>
               <td className="py-0.5 text-right">{formatMVR(item.unitPrice)}</td>
               <td className="py-0.5 text-right">{formatMVR(item.lineTotal)}</td>
