@@ -47,9 +47,14 @@ export default async function DashboardPage() {
       .limit(8),
     supabase
       .from("order_items")
-      .select("line_total,created_at,product:products(category_id,category:categories(name))")
-      .gte("created_at", weekStart),
-    supabase.from("payments").select("amount,created_at,payment_method:payment_methods(name)").gte("created_at", weekStart),
+      .select("line_total,created_at,order:orders!inner(voided),product:products(category_id,category:categories(name))")
+      .gte("created_at", weekStart)
+      .eq("order.voided", false),
+    supabase
+      .from("payments")
+      .select("amount,created_at,order:orders!inner(voided),payment_method:payment_methods(name)")
+      .gte("created_at", weekStart)
+      .eq("order.voided", false),
     supabase.from("payment_methods").select("id,name").eq("enabled", true),
   ]);
 
