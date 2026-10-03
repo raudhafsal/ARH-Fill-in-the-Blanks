@@ -375,30 +375,43 @@ export function CsvImportDialog({
                         </div>
                       )}
 
-                      {result.groups.some((g) => g.packDetected) && (
+                      {result.groups.some((g) => g.packBaseRowIndex !== null) && (
                         <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
                           <p className="flex items-center gap-1.5 text-sm font-medium">
                             <PackageOpen className="h-4 w-4" />
-                            Pack sizes detected
+                            Shared stock options
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            These look like the same item sold in different pack sizes (price and cost scale cleanly),
-                            not separate variants — e.g. a "Packet" priced at exactly 10x a "Single". By default they're
-                            imported as ONE product that shares a single stock count, scaled per pack, the same way the
-                            POS already handles units. Turn a switch off to import it as separate products instead.
+                            Rows marked "Pack sizes" scale cleanly (e.g. a "Packet" priced at exactly 10x a "Single") and
+                            default to ONE product sharing a single stock count, scaled per pack — same as the POS units.
+                            Other groups (like a flavor with/without an add-on) don't scale by quantity, but may still be
+                            the same stocked item at a different price — turn their switch on to import them the same
+                            way, as one product with the extra rows as same-stock priced options instead of separate
+                            products with their own stock.
                           </p>
                           <div className="space-y-1.5">
                             {result.groups.map((g, i) => {
-                              if (!g.packDetected || g.packBaseRowIndex === null) return null;
+                              if (g.packBaseRowIndex === null) return null;
                               const baseRow = g.rows[g.packBaseRowIndex];
                               const others = g.rows.filter((_, ri) => ri !== g.packBaseRowIndex);
                               return (
                                 <div key={i} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
                                   <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium">{g.name}</p>
+                                    <p className="truncate text-sm font-medium">
+                                      {g.name}{" "}
+                                      <span className="font-normal text-muted-foreground">
+                                        {g.packDetected ? "· pack sizes" : "· priced options"}
+                                      </span>
+                                    </p>
                                     <p className="truncate text-xs text-muted-foreground">
                                       {variantLabel(baseRow) || "base"} = 1 ·{" "}
-                                      {others.map((r) => `${variantLabel(r) || "unit"} = ${r.suggestedScale}x`).join(", ")}
+                                      {others
+                                        .map((r) =>
+                                          g.packDetected
+                                            ? `${variantLabel(r) || "unit"} = ${r.suggestedScale}x`
+                                            : `${variantLabel(r) || "unit"} = ${formatMVR(r.sellingPrice)}`
+                                        )
+                                        .join(", ")}
                                     </p>
                                   </div>
                                   <div className="flex shrink-0 items-center gap-2">
@@ -450,7 +463,7 @@ export function CsvImportDialog({
                                   <TableCell className="font-medium">{g.name}</TableCell>
                                   <TableCell>
                                     {packMode
-                                      ? `${g.rows.length} pack sizes (1 product)`
+                                      ? `${g.rows.length} ${g.packDetected ? "pack sizes" : "priced options"} (1 product)`
                                       : g.isVariantGroup
                                         ? `${g.rows.length} variants`
                                         : "—"}

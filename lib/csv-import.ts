@@ -42,11 +42,16 @@ export interface ParsedProductGroup {
    *  cheapest row's — e.g. "Single" 3.50 / "Packet" 35.00 is exactly 10x both in price and cost.
    *  Ewity exports this as a Size/Color-style variant (Attr 1 Value), but that pattern almost
    *  always means "the same item, sold in different pack sizes" rather than a genuine variant —
-   *  this is the "Wafer Chocolate" case the unit-scale POS fix was built for. The importer defaults
-   *  to importing these as ONE product with product_units instead of separate products, but shows
-   *  the detection so the cashier/owner can override it back to separate products if it's wrong. */
+   *  this is the "Wafer Chocolate" case the unit-scale POS fix was built for. When true, the
+   *  importer defaults to importing these as ONE product with product_units instead of separate
+   *  products (scaled per pack), but still shows the detection so it can be overridden back to
+   *  separate products if it's wrong. */
   packDetected: boolean;
-  /** Index into `rows` of the cheapest row — becomes the product's base unit/stock when packDetected. */
+  /** Index into `rows` of the cheapest row for ANY multi-row variant group (not just packDetected
+   *  ones) — becomes the product's base unit/stock if shared-stock mode is used. Rows that aren't a
+   *  clean pack multiple (e.g. a Jugo flavor's "Without Jelly" 30 / "With Jelly" 35 — same drink,
+   *  priced differently, not a quantity multiple) still get a base row and a fallback scale of 1 so
+   *  the import dialog can offer "shared stock" as a manual choice, not just an auto-detection. */
   packBaseRowIndex: number | null;
 }
 
@@ -219,13 +224,28 @@ function groupEwityRows(rows: RawRow[], fields: string[]): ParseResult {
     }
     if (g.isVariantGroup && g.rows.length > 1) {
       const pack = detectPackGroup(g.rows);
-      if (pack) {
-        g.packDetected = true;
-        g.packBaseRowIndex = pack.baseIndex;
-        g.rows.forEach((r, i) => {
-          r.suggestedScale = pack.scales[i];
-        });
+      // Even when the price/cost doesn't scale cleanly (so this isn't a genuine "pack size" like
+      // Wafer Chocolate's Single/Packet), the rows might still be the same stocked item sold as
+      // priced options rather than true variants — e.g. a Jugo flavor "Without Jelly"/"With Jelly",
+      // where the only difference is price (and maybe an add-on ingredient), not quantity. We always
+      // compute a base row (cheapest) and a fallback scale of 1 for every row so the import dialog
+      // can offer a manual "shared stock" toggle on ANY multi-row group, not just detected packs.
+      let baseIndex = pack?.baseIndex;
+      if (baseIndex === undefined) {
+        baseIndex = 0;
+        for (let i = 1; i < g.rows.length; i++) {
+          const row = g.rows[i];
+          const base = g.rows[baseIndex];
+          if (row.sellingPrice > 0 && (base.sellingPrice <= 0 || row.sellingPrice < base.sellingPrice)) {
+            baseIndex = i;
+          }
+        }
       }
+      g.packDetected = !!pack;
+      g.packBaseRowIndex = baseIndex;
+      g.rows.forEach((r, i) => {
+        r.suggestedScale = pack ? pack.scales[i] : 1;
+      });
     }
   }
 
