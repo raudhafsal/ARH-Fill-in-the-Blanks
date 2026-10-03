@@ -212,7 +212,7 @@ export function PurchaseForm({
   }
 
   function removeLine(key: string) {
-    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : prev));
+    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : [newLine()]));
   }
 
   function onProductSelect(key: string, productId: string) {
@@ -462,7 +462,6 @@ export function PurchaseForm({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
-                          disabled={lines.length === 1}
                           onClick={() => removeLine(l.key)}
                           aria-label="Remove line"
                         >
