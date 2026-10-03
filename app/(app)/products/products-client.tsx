@@ -165,6 +165,10 @@ export function ProductsClient({
   const [categorySaving, setCategorySaving] = useState(false);
 
   const categoryMap = useMemo(() => new Map(categoryList.map((c) => [c.id, c.name])), [categoryList]);
+  const ingredientsCategoryId = useMemo(
+    () => categoryList.find((c) => c.name.trim().toLowerCase() === "ingredients")?.id ?? null,
+    [categoryList]
+  );
   const unitMap = useMemo(() => new Map(products.map((p) => [p.id, p.unit])), [products]);
   const variantGroupMap = useMemo(() => new Map(variantGroupList.map((g) => [g.id, g.name])), [variantGroupList]);
 
@@ -1053,6 +1057,7 @@ export function ProductsClient({
                         <SelectContent>
                           {products
                             .filter((p) => p.id !== editing?.id)
+                            .filter((p) => !ingredientsCategoryId || p.category_id === ingredientsCategoryId)
                             .map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.name}
