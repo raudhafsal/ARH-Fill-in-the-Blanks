@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { NavItem } from "@/lib/nav-config";
+import { flattenNav, type NavItem } from "@/lib/nav-config";
 import { MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
@@ -12,7 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function MobileNav({ items }: { items: NavItem[] }) {
+export function MobileNav({ items: groupedItems }: { items: NavItem[] }) {
+  const items = flattenNav(groupedItems);
   // See sidebar.tsx — usePathname() can return null during certain SSR passes.
   const pathname = usePathname() ?? "";
   const primary = items.filter((i) => i.mobilePriority).slice(0, 4);
