@@ -26,9 +26,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // getSession() reads + validates the cookie locally and only hits the network when the token needs
+  // refreshing. getUser() made a round-trip to Supabase Auth on EVERY page load (slow). This middleware
+  // is only a redirect gate; the database enforces real access with the JWT through RLS.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/forgot-password") ||

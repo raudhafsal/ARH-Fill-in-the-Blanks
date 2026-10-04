@@ -16,9 +16,12 @@ import { redirect } from "next/navigation";
  */
 export const requireProfile = cache(async (): Promise<Profile> => {
   const supabase = createClient();
+  // getSession() avoids a network call to Supabase Auth on every page (the middleware already refreshed
+  // the token). Every query below still runs with the user's JWT, which Postgres RLS verifies.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
 
   if (!user) redirect("/login");
 

@@ -48,12 +48,10 @@ const nextConfig = {
   },
   eslint: { ignoreDuringBuilds: true },
   experimental: {
-    // Disable the client-side Router Cache for dynamic routes so pages like
-    // the dashboard always refetch fresh data after navigating back to them
-    // (e.g. right after completing a POS sale), instead of showing a stale
-    // cached view for up to 30 seconds.
+    // Keep visited pages in the client router cache for 30s so going back and forth between pages is
+    // instant. Mutations call router.refresh(), which clears this cache, so data stays correct.
     staleTimes: {
-      dynamic: 0,
+      dynamic: 30,
     },
   },
 };

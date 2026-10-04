@@ -14,14 +14,14 @@ function isActive(pathname: string, href: string) {
 function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
   const children = item.children ?? [];
   const childActive = children.some((c) => isActive(pathname, c.href));
-  const [open, setOpen] = useState(childActive);
+  const [open, setOpen] = useState(true);
   const Icon = item.icon;
   return (
     <div>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-expanded={open || childActive}
+        aria-expanded={open}
         className={cn(
           "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
           childActive ? "text-foreground" : "text-foreground/80 hover:bg-accent hover:text-accent-foreground"
@@ -29,9 +29,9 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
       >
         <Icon className="h-4 w-4" />
         <span className="flex-1 text-left">{item.label}</span>
-        <ChevronDown className={cn("h-4 w-4 transition-transform", (open || childActive) && "rotate-180")} />
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </button>
-      {(open || childActive) && (
+      {open && (
         <div className="ml-4 mt-1 space-y-1 border-l pl-2">
           {children.map((c) => {
             const active = isActive(pathname, c.href);
