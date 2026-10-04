@@ -19,8 +19,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { formatMVR, formatMaldivesDateTime, round2 } from "@/lib/utils";
-import type { CashRegister, Profile, RegisterTxnType } from "@/types/database";
+import { formatMVR, formatMaldivesDateTime } from "@/lib/utils";
+import { DenominationCounter } from "@/components/register/denomination-counter";
+import { ReconciliationTable } from "@/components/register/reconciliation-table";
+import { CloseRegisterDialog } from "@/components/register/close-register-dialog";
+import { cleanDenominations, type Denominations } from "@/lib/register";
+import type { CashRegister, Profile, RegisterSummaryRow, RegisterTxnType } from "@/types/database";
 import { Loader2, PlusCircle, MinusCircle, Lock } from "lucide-react";
 
 interface RegisterTxn {
@@ -36,10 +40,12 @@ export function RegisterClient({
   profile,
   openRegister,
   transactions,
+  summary,
 }: {
   profile: Profile;
   openRegister: CashRegister | null;
   transactions: RegisterTxn[];
+  summary: RegisterSummaryRow[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -54,20 +60,23 @@ export function RegisterClient({
   const [movementReason, setMovementReason] = useState("");
   const [movementNotes, setMovementNotes] = useState("");
 
+  const [openingDenoms, setOpeningDenoms] = useState<Denominations>({});
   const [closeOpen, setCloseOpen] = useState(false);
-  const [closeStep, setCloseStep] = useState<"count" | "confirm">("count");
-  const [actualCash, setActualCash] = useState("");
-  const [closingNotes, setClosingNotes] = useState("");
 
-  const expectedCash = useMemo(() => {
-    if (!openRegister) return 0;
-    const delta = transactions.reduce((sum, t) => {
-      if (t.type === "cash_sale" || t.type === "cash_in" || t.type === "opening_float") return sum + Number(t.amount);
-      if (t.type === "cash_refund" || t.type === "cash_out") return sum - Number(t.amount);
-      return sum;
-    }, 0);
-    return round2(Number(openRegister.opening_cash) + delta);
-  }, [openRegister, transactions]);
+  const expectedCash = useMemo(() => summary.find((r) => r.is_cash)?.expected ?? Number(openRegister?.opening_cash ?? 0), [summary, openRegister]);
+  const reconRows = useMemo(
+    () =>
+      summary.map((r) => ({
+        id: r.payment_method_id,
+        name: r.method_name,
+        isCash: r.is_cash,
+        isCredit: r.is_credit,
+        opening: r.opening,
+        received: r.received,
+        expected: r.expected,
+      })),
+    [summary]
+  );
 
   async function handleOpenRegister() {
     const amount = Number(openingCash);
@@ -76,15 +85,14 @@ export function RegisterClient({
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from("cash_registers").insert({
-      cashier_id: profile.id,
-      opening_cash: amount,
-      opening_notes: openingNotes.trim() || null,
-      status: "open",
+    const { error } = await supabase.rpc("open_register_session", {
+      p_opening_cash: amount,
+      p_notes: openingNotes.trim() || null,
+      p_denominations: cleanDenominations(openingDenoms),
     });
     setSubmitting(false);
     if (error) {
-      toast.error("Unable to open the register. Please try again.");
+      toast.error(error.message?.includes("already have an open") ? "You already have an open register." : "Unable to open the register. Please try again.");
       return;
     }
     toast.success("Register opened.");
@@ -123,31 +131,6 @@ export function RegisterClient({
     router.refresh();
   }
 
-  async function handleCloseRegister() {
-    if (!openRegister) return;
-    const amount = Number(actualCash);
-    if (!Number.isFinite(amount) || amount < 0) {
-      toast.error("Enter the actual cash counted.");
-      return;
-    }
-    setSubmitting(true);
-    const { error } = await supabase.rpc("close_register", {
-      p_register_id: openRegister.id,
-      p_actual_cash: amount,
-      p_notes: closingNotes.trim() || null,
-    });
-    setSubmitting(false);
-    if (error) {
-      toast.error("Unable to close the register. Please try again.");
-      return;
-    }
-    toast.success("Register closed.");
-    setCloseOpen(false);
-    setCloseStep("count");
-    router.push("/dashboard");
-    router.refresh();
-  }
-
   if (!openRegister) {
     return (
       <div className="mx-auto max-w-md space-y-6 p-4 sm:p-6">
@@ -161,6 +144,13 @@ export function RegisterClient({
               <Label htmlFor="opening-cash">Opening cash (MVR)</Label>
               <Input id="opening-cash" type="number" min={0} step="0.01" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)} />
             </div>
+            <DenominationCounter
+              value={openingDenoms}
+              onChange={(next, total) => {
+                setOpeningDenoms(next);
+                if (total > 0) setOpeningCash(String(total));
+              }}
+            />
             <div className="space-y-1.5">
               <Label htmlFor="opening-notes">Notes (optional)</Label>
               <Input id="opening-notes" value={openingNotes} onChange={(e) => setOpeningNotes(e.target.value)} placeholder="e.g. Counted with manager" />
@@ -179,7 +169,7 @@ export function RegisterClient({
     <div className="space-y-6 p-4 sm:p-6">
       <PageHeader
         title="Cash register"
-        description={`Open since ${formatMaldivesDateTime(openRegister.opened_at)}`}
+        description={`Session #${openRegister.session_no} · open since ${formatMaldivesDateTime(openRegister.opened_at)}`}
         actions={
           <>
             <Button variant="outline" className="gap-1.5" onClick={() => { setMovementType("cash_in"); setMovementOpen(true); }}>
@@ -214,6 +204,17 @@ export function RegisterClient({
           </CardHeader>
           <CardContent>
             <Badge variant="success">Open</Badge>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="px-4 sm:px-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Payments this session</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 sm:p-0">
+            <ReconciliationTable rows={reconRows} showClosing={false} />
           </CardContent>
         </Card>
       </div>
@@ -296,73 +297,16 @@ export function RegisterClient({
         </DialogContent>
       </Dialog>
 
-      {/* Close register */}
-      <Dialog open={closeOpen} onOpenChange={(v) => { setCloseOpen(v); if (!v) setCloseStep("count"); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Close register</DialogTitle>
-          </DialogHeader>
-          {closeStep === "count" ? (
-            <div className="space-y-3">
-              <div className="rounded-lg bg-muted p-3 text-sm">
-                <div className="flex justify-between">
-                  <span>Expected cash</span>
-                  <span className="font-semibold">{formatMVR(expectedCash)}</span>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="actual-cash">Actual cash counted (MVR)</Label>
-                <Input id="actual-cash" type="number" min={0} step="0.01" value={actualCash} onChange={(e) => setActualCash(e.target.value)} autoFocus />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="closing-notes">Notes (optional)</Label>
-                <Input id="closing-notes" value={closingNotes} onChange={(e) => setClosingNotes(e.target.value)} />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2 rounded-lg border p-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Expected</span>
-                <span>{formatMVR(expectedCash)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Actual counted</span>
-                <span>{formatMVR(Number(actualCash) || 0)}</span>
-              </div>
-              <div className="flex justify-between font-semibold">
-                <span>Difference</span>
-                <span className={round2((Number(actualCash) || 0) - expectedCash) < 0 ? "text-destructive" : "text-success"}>
-                  {formatMVR(round2((Number(actualCash) || 0) - expectedCash))}
-                </span>
-              </div>
-              <p className="pt-2 text-xs text-muted-foreground">This closes the register for good — you'll need to open a new one to sell again.</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCloseOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            {closeStep === "count" ? (
-              <Button
-                onClick={() => {
-                  if (!actualCash.trim() || Number(actualCash) < 0) {
-                    toast.error("Enter the actual cash counted.");
-                    return;
-                  }
-                  setCloseStep("confirm");
-                }}
-              >
-                Review &amp; close
-              </Button>
-            ) : (
-              <Button variant="destructive" onClick={handleCloseRegister} disabled={submitting}>
-                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirm close
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CloseRegisterDialog
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        registerId={openRegister.id}
+        summary={summary}
+        onClosed={() => {
+          router.push("/dashboard");
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

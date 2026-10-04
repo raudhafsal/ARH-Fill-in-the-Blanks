@@ -80,11 +80,14 @@
   #receipt-print-area,
   #receipt-print-area *,
   #po-print-area,
-  #po-print-area * {
+  #po-print-area *,
+  #session-print-area,
+  #session-print-area * {
     visibility: visible;
   }
   #receipt-print-area,
-  #po-print-area {
+  #po-print-area,
+  #session-print-area {
     position: absolute;
     left: 0;
     top: 0;

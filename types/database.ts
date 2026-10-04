@@ -283,6 +283,38 @@ export interface CashRegister {
   closing_notes: string | null;
   opened_at: string;
   closed_at: string | null;
+  session_no: number;
+  closed_by: string | null;
+  /** Notes-and-coins count at opening/closing, e.g. { "100": 2, "20": 1 } (denomination → how many). */
+  opening_denominations: Record<string, number> | null;
+  closing_denominations: Record<string, number> | null;
+}
+
+/** One row of register_session_summary(): a payment method's live figures for one session. */
+export interface RegisterSummaryRow {
+  payment_method_id: string;
+  method_name: string;
+  method_code: string;
+  method_order: number;
+  opening: number;
+  received: number;
+  cash_in: number;
+  cash_out: number;
+  expected: number;
+  is_cash: boolean;
+  is_credit: boolean;
+}
+
+/** Per-payment-method reconciliation stored when a session is closed. */
+export interface CashRegisterCloseLine {
+  id: string;
+  register_id: string;
+  payment_method_id: string;
+  opening: number;
+  received: number;
+  expected: number;
+  counted: number;
+  difference: number;
 }
 
 export interface CashRegisterTransaction {

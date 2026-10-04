@@ -13,6 +13,8 @@ import {
   UserCog,
   Settings,
   ChefHat,
+  Landmark,
+  ClipboardList,
 } from "lucide-react";
 
 export interface NavItem {
@@ -32,6 +34,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Inventory", href: "/inventory", icon: Boxes, roles: ["administrator", "manager"] },
   { label: "Purchases", href: "/purchases", icon: Truck, roles: ["administrator", "manager"] },
   { label: "Expenses", href: "/expenses", icon: Wallet, roles: ["administrator", "manager"] },
+  { label: "Register", href: "/register", icon: Landmark, roles: ["administrator", "manager", "cashier"] },
+  { label: "Register sessions", href: "/register-sessions", icon: ClipboardList, roles: ["administrator", "manager"] },
   { label: "Customers", href: "/customers", icon: Users, roles: ["administrator", "manager", "cashier"] },
   { label: "Kitchen", href: "/kitchen", icon: ChefHat, roles: ["administrator", "manager", "cashier"] },
   { label: "Reports", href: "/reports", icon: BarChart3, roles: ["administrator", "manager"] },
