@@ -59,7 +59,9 @@ export default async function ReportsPage({
       : { data: [] as OrderItem[] };
 
   const refunds = (refundsRaw ?? []) as Refund[];
-  const payments = (paymentsRaw ?? []) as Payment[];
+  // Only payments of orders that count (not voided/cancelled) — otherwise voided sales inflate the totals.
+  const validOrderIds = new Set(orderIds);
+  const payments = ((paymentsRaw ?? []) as Payment[]).filter((p) => validOrderIds.has(p.order_id));
   const expenses = (expensesRaw ?? []) as Expense[];
   const products = (productsRaw ?? []) as Product[];
   const categories = (categoriesRaw ?? []) as Category[];
