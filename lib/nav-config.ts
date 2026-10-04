@@ -29,13 +29,6 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["administrator", "manager", "cashier"], mobilePriority: true },
-  { label: "POS", href: "/pos", icon: ShoppingCart, roles: ["administrator", "manager", "cashier"], mobilePriority: true },
-  { label: "Orders", href: "/orders", icon: Receipt, roles: ["administrator", "manager", "cashier"], mobilePriority: true },
-  { label: "Products", href: "/products", icon: Package, roles: ["administrator", "manager"], mobilePriority: true },
-  { label: "Categories", href: "/categories", icon: Tags, roles: ["administrator", "manager"] },
-  { label: "Inventory", href: "/inventory", icon: Boxes, roles: ["administrator", "manager"] },
-  { label: "Purchases", href: "/purchases", icon: Truck, roles: ["administrator", "manager"] },
-  { label: "Expenses", href: "/expenses", icon: Wallet, roles: ["administrator", "manager"] },
   {
     label: "Manage Register",
     href: "#manage-register",
@@ -46,6 +39,13 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Register sessions", href: "/register-sessions", icon: ClipboardList, roles: ["administrator", "manager"] },
     ],
   },
+  { label: "POS", href: "/pos", icon: ShoppingCart, roles: ["administrator", "manager", "cashier"], mobilePriority: true },
+  { label: "Orders", href: "/orders", icon: Receipt, roles: ["administrator", "manager", "cashier"], mobilePriority: true },
+  { label: "Products", href: "/products", icon: Package, roles: ["administrator", "manager"], mobilePriority: true },
+  { label: "Categories", href: "/categories", icon: Tags, roles: ["administrator", "manager"] },
+  { label: "Inventory", href: "/inventory", icon: Boxes, roles: ["administrator", "manager"] },
+  { label: "Purchases", href: "/purchases", icon: Truck, roles: ["administrator", "manager"] },
+  { label: "Expenses", href: "/expenses", icon: Wallet, roles: ["administrator", "manager"] },
   { label: "Customers", href: "/customers", icon: Users, roles: ["administrator", "manager", "cashier"] },
   { label: "Kitchen", href: "/kitchen", icon: ChefHat, roles: ["administrator", "manager", "cashier"] },
   { label: "Reports", href: "/reports", icon: BarChart3, roles: ["administrator", "manager"] },
