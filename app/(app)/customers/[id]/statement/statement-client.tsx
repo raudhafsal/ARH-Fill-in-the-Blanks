@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { formatMVR, formatMaldivesDate, formatMaldivesDateTime, round2 } from "@/lib/utils";
+import { formatMVR, formatMaldivesDate, round2 } from "@/lib/utils";
 import type { BusinessSettings, Customer } from "@/types/database";
 import { ArrowLeft, Printer, MessageCircle } from "lucide-react";
 
@@ -108,7 +108,7 @@ export function StatementClient({
             <tbody>
               {lines.map((l, i) => (
                 <tr key={i} className="border-b align-top">
-                  <td className="whitespace-nowrap px-2 py-2">{formatMaldivesDateTime(l.date, { dateStyle: "medium" })}</td>
+                  <td className="whitespace-nowrap px-2 py-2">{formatMaldivesDate(l.date)}</td>
                   <td className="whitespace-nowrap px-2 py-2 font-medium">{l.ref}</td>
                   <td className="px-2 py-2 text-neutral-600">{l.description}</td>
                   <td className="px-2 py-2 text-right tabular-nums">{l.charge ? formatMVR(l.charge) : ""}</td>
