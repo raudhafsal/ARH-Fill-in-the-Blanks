@@ -52,7 +52,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  // /reset-password must stay reachable while signed in: it is both the "Change password" page in the
+  // header menu and where the emailed recovery link lands (which signs the user in first).
+  const isResetRoute = request.nextUrl.pathname.startsWith("/reset-password");
+  if (user && isAuthRoute && !isResetRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

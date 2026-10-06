@@ -34,8 +34,10 @@ export default function ResetPasswordPage() {
       toast.error("Unable to update password. The reset link may have expired.");
       return;
     }
-    toast.success("Password updated. Please sign in.");
-    router.push("/login");
+    toast.success("Password updated.");
+    // The user is signed in at this point (either already, or via the recovery link).
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
