@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -8,6 +9,45 @@ import { formatMVR, cn } from "@/lib/utils";
 import type { CartItem, CartTotals } from "@/lib/pos/types";
 import type { OrderType } from "@/types/database";
 import { Minus, Plus, Trash2, Pencil, Percent, PauseCircle, LayoutList } from "lucide-react";
+
+/** Quantity you can type into, as well as step with the +/- buttons. Commits on blur/Enter; an empty or
+ * invalid entry snaps back to the previous quantity (use the bin button to remove a line). */
+function QtyInput({ value, onCommit }: { value: number; onCommit: (qty: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+
+  function commit() {
+    const n = Math.round(Number(draft) * 1000) / 1000;
+    if (!Number.isFinite(n) || n <= 0) {
+      setDraft(String(value));
+      return;
+    }
+    if (n !== value) onCommit(n);
+    else setDraft(String(value));
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      aria-label="Quantity"
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => {
+        if (/^\d*\.?\d{0,3}$/.test(e.target.value)) setDraft(e.target.value);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setDraft(String(value));
+          e.currentTarget.blur();
+        }
+      }}
+      className="h-8 w-14 rounded-md border border-input bg-background text-center text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    />
+  );
+}
 
 export function CartPanel({
   activeLabel,
@@ -105,7 +145,7 @@ export function CartPanel({
                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onQtyChange(item.lineId, item.quantity - 1)}>
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
-                    <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+                    <QtyInput value={item.quantity} onCommit={(q) => onQtyChange(item.lineId, q)} />
                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onQtyChange(item.lineId, item.quantity + 1)}>
                       <Plus className="h-3.5 w-3.5" />
                     </Button>

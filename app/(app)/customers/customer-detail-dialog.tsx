@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatMVR, formatMaldivesDateTime, round2 } from "@/lib/utils";
-import { Receipt, Loader2, Wallet, HandCoins } from "lucide-react";
+import Link from "next/link";
+import { Receipt, Loader2, Wallet, HandCoins, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 export function CustomerDetailDialog({
@@ -143,11 +144,20 @@ export function CustomerDetailDialog({
               />
             </div>
 
-            {balance > 0 && (
-              <Button className="w-full gap-1.5" onClick={() => setSettleOpen(true)}>
-                <HandCoins className="h-4 w-4" /> Record a payment towards this balance
-              </Button>
-            )}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {balance > 0 && (
+                <Button className="flex-1 gap-1.5" onClick={() => setSettleOpen(true)}>
+                  <HandCoins className="h-4 w-4" /> Record a payment towards this balance
+                </Button>
+              )}
+              {customer && (
+                <Button asChild variant="outline" className="flex-1 gap-1.5">
+                  <Link href={`/customers/${customer.id}/statement`}>
+                    <FileText className="h-4 w-4" /> Credit bill
+                  </Link>
+                </Button>
+              )}
+            </div>
 
             {customer?.notes && (
               <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{customer.notes}</div>

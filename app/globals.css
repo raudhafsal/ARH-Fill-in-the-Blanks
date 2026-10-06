@@ -82,12 +82,15 @@
   #po-print-area,
   #po-print-area *,
   #session-print-area,
-  #session-print-area * {
+  #session-print-area *,
+  #statement-print-area,
+  #statement-print-area * {
     visibility: visible;
   }
   #receipt-print-area,
   #po-print-area,
-  #session-print-area {
+  #session-print-area,
+  #statement-print-area {
     position: absolute;
     left: 0;
     top: 0;
