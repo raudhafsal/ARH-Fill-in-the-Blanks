@@ -17,3 +17,10 @@ export function maldivesEndOfDay(daysAgo = 0): Date {
 export function maldivesDayLabel(date: Date): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Indian/Maldives", weekday: "short", day: "2-digit" }).format(date);
 }
+
+/** Start of a calendar month in Maldives time (monthsAgo=0 is the current month), as a UTC Date. */
+export function maldivesStartOfMonth(monthsAgo = 0): Date {
+  const mvNow = new Date(Date.now() + MALDIVES_OFFSET_MINUTES * 60 * 1000);
+  const firstUtc = Date.UTC(mvNow.getUTCFullYear(), mvNow.getUTCMonth() - monthsAgo, 1);
+  return new Date(firstUtc - MALDIVES_OFFSET_MINUTES * 60 * 1000);
+}

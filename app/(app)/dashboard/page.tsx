@@ -3,7 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { formatMVR } from "@/lib/utils";
-import { maldivesStartOfDay, maldivesEndOfDay, maldivesDayLabel } from "@/lib/maldives-time";
+import { maldivesStartOfDay, maldivesEndOfDay, maldivesDayLabel, maldivesStartOfMonth } from "@/lib/maldives-time";
 import { SalesByDayChart, OrdersByDayChart, CategoryPieChart, PaymentMethodChart } from "./charts";
 import { BillHistory } from "./bill-history";
 import { DollarSign, ShoppingBag, TrendingUp, Wallet, Package, AlertTriangle, XCircle, Users } from "lucide-react";
@@ -18,12 +18,14 @@ export default async function DashboardPage() {
   const todayStart = maldivesStartOfDay(0).toISOString();
   const todayEnd = maldivesEndOfDay(0).toISOString();
   const weekStart = maldivesStartOfDay(6).toISOString();
-  const monthStart = maldivesStartOfDay(29).toISOString();
+  const monthStart = maldivesStartOfMonth(0).toISOString();
+  const lastMonthStart = maldivesStartOfMonth(1).toISOString();
 
   const [
     { data: todayOrders },
     { data: weekOrders },
     { data: monthOrders },
+    { data: lastMonthOrders },
     { data: todayExpenses },
     { count: totalProducts },
     { count: totalCustomers },
@@ -36,6 +38,7 @@ export default async function DashboardPage() {
     supabase.from("orders").select("id,total,discount_amount,created_at,voided").gte("created_at", todayStart).lte("created_at", todayEnd).eq("voided", false),
     supabase.from("orders").select("id,total,created_at,voided").gte("created_at", weekStart).eq("voided", false),
     supabase.from("orders").select("id,total,created_at,voided").gte("created_at", monthStart).eq("voided", false),
+    supabase.from("orders").select("id,total,created_at,voided").gte("created_at", lastMonthStart).lt("created_at", monthStart).eq("voided", false),
     supabase.from("expenses").select("amount").gte("expense_date", todayStart.slice(0, 10)).lte("expense_date", todayEnd.slice(0, 10)),
     supabase.from("products").select("id", { count: "exact", head: true }).eq("active", true),
     supabase.from("customers").select("id", { count: "exact", head: true }),
@@ -74,6 +77,7 @@ export default async function DashboardPage() {
 
   const weekSales = (weekOrders ?? []).reduce((s, o) => s + Number(o.total), 0);
   const monthSales = (monthOrders ?? []).reduce((s, o) => s + Number(o.total), 0);
+  const lastMonthSales = (lastMonthOrders ?? []).reduce((s, o) => s + Number(o.total), 0);
 
   const lowStock = (lowStockProducts ?? []).filter((p) => Number(p.current_stock) <= Number(p.minimum_stock) && Number(p.current_stock) > 0);
   const outOfStock = (lowStockProducts ?? []).filter((p) => Number(p.current_stock) <= 0);
@@ -146,10 +150,11 @@ export default async function DashboardPage() {
 
         <div>
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Sales summary</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Today" value={formatMVR(todaySales)} />
             <StatCard label="This Week" value={formatMVR(weekSales)} />
             <StatCard label="This Month" value={formatMVR(monthSales)} />
+            <StatCard label="Last Month" value={formatMVR(lastMonthSales)} />
           </div>
         </div>
 
