@@ -122,7 +122,7 @@ export default async function DashboardPage() {
       <div className="space-y-4 px-4 sm:px-6">
         <div>
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Today</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
             <StatCard label="Today's Sales" value={formatMVR(todaySales)} icon={DollarSign} />
             <StatCard label="Orders" value={String(todayOrderCount)} icon={ShoppingBag} />
             <StatCard label="Avg Order Value" value={formatMVR(avgOrderValue)} icon={TrendingUp} />
@@ -143,7 +143,7 @@ export default async function DashboardPage() {
 
         <div>
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Sales summary</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatCard label="Today" value={formatMVR(todaySales)} />
             <StatCard label="This Week" value={formatMVR(weekSales)} />
             <StatCard label="This Month" value={formatMVR(monthSales)} />
