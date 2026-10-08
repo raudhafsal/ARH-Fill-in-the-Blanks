@@ -466,7 +466,7 @@ export function PosClient({
           await finish(null, "pending");
           return;
         }
-        toast.error("Unable to complete sale. Please try again.");
+        toast.error(/CREDIT_LIMIT_EXCEEDED/.test(error.message) ? error.message.replace(/^CREDIT_LIMIT_EXCEEDED:\s*/, "") : "Unable to complete sale. Please try again.");
         setProcessingPayment(false);
         return;
       }

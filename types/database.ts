@@ -124,6 +124,7 @@ export interface Customer {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  credit_limit: number | null;
   created_at: string;
   updated_at: string;
 }

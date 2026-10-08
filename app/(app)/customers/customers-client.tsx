@@ -25,11 +25,15 @@ const customerSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   notes: z.string().optional(),
+  credit_limit: z
+    .string()
+    .optional()
+    .refine((v) => !v || (Number.isFinite(Number(v)) && Number(v) >= 0), "Enter a valid amount"),
 });
 
 type CustomerForm = z.infer<typeof customerSchema>;
 
-const emptyForm: CustomerForm = { full_name: "", phone: "", address: "", notes: "" };
+const emptyForm: CustomerForm = { full_name: "", phone: "", address: "", notes: "", credit_limit: "" };
 
 export function CustomersClient({
   initialCustomers,
@@ -98,6 +102,7 @@ export function CustomersClient({
       phone: customer.phone ?? "",
       address: customer.address ?? "",
       notes: customer.notes ?? "",
+      credit_limit: customer.credit_limit != null ? String(customer.credit_limit) : "",
     });
     setErrors({});
     setDialogOpen(true);
@@ -121,6 +126,7 @@ export function CustomersClient({
         phone: parsed.data.phone || null,
         address: parsed.data.address || null,
         notes: parsed.data.notes || null,
+        credit_limit: parsed.data.credit_limit ? Number(parsed.data.credit_limit) : null,
       };
       if (editing) {
         const { error } = await supabase.from("customers").update(payload).eq("id", editing.id);
@@ -186,6 +192,7 @@ export function CustomersClient({
                   <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Credit owed</TableHead>
+                  <TableHead>Credit limit</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
@@ -202,6 +209,13 @@ export function CustomersClient({
                         <Badge variant="warning">{formatMVR(balance)}</Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {customer.credit_limit != null ? (
+                        <span className={balance > customer.credit_limit ? "font-medium text-destructive" : ""}>{formatMVR(customer.credit_limit)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">No limit</span>
                       )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -243,6 +257,19 @@ export function CustomersClient({
             <div className="space-y-1">
               <Label htmlFor="address">Address</Label>
               <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="credit_limit">Credit limit (MVR)</Label>
+              <Input
+                id="credit_limit"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Leave empty for no limit"
+                value={form.credit_limit}
+                onChange={(e) => setForm({ ...form, credit_limit: e.target.value })}
+              />
+              {errors.credit_limit && <p className="text-xs text-destructive">{errors.credit_limit}</p>}
             </div>
             <div className="space-y-1">
               <Label htmlFor="notes">Notes</Label>

@@ -75,6 +75,27 @@ export function PaymentDialog({
   const insufficientCash = isCash && receivedNum < total;
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
+  const [owed, setOwed] = useState<number | null>(null);
+  useEffect(() => {
+    setOwed(null);
+    if (!open || !isCredit || !customerId) return;
+    let cancelled = false;
+    createClient()
+      .from("customer_credit_balances")
+      .select("balance")
+      .eq("customer_id", customerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setOwed(Number((data as { balance: number } | null)?.balance ?? 0));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isCredit, customerId]);
+  const creditLimit = selectedCustomer?.credit_limit ?? null;
+  const afterSale = owed != null ? round2(owed + total) : null;
+  const overLimit = isCredit && creditLimit != null && afterSale != null && afterSale > creditLimit;
+  const available = creditLimit != null && owed != null ? Math.max(round2(creditLimit - owed), 0) : null;
   const matchingCustomers = useMemo(() => {
     const q = customerSearch.trim().toLowerCase();
     if (!q) return customers.slice(0, 8);
@@ -117,6 +138,10 @@ export function PaymentDialog({
     }
     if (isCredit && !customerId) {
       toast.error("Select a customer for this credit sale.");
+      return;
+    }
+    if (overLimit) {
+      toast.error("This sale exceeds the customer's credit limit.");
       return;
     }
     onConfirm({
@@ -163,6 +188,7 @@ export function PaymentDialog({
           <div className="space-y-2">
             <Label>Customer</Label>
             {selectedCustomer ? (
+              <>
               <div className="flex items-center justify-between gap-2 rounded-md border bg-primary/5 px-3 py-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <UserCircle2 className="h-4 w-4 shrink-0 text-primary" />
@@ -175,6 +201,13 @@ export function PaymentDialog({
                   Change
                 </Button>
               </div>
+            {owed != null && (
+              <div className={cn("rounded-md border px-3 py-2 text-xs", overLimit ? "border-destructive bg-destructive/10 text-destructive" : "bg-muted")}>
+                <p>Currently owes {formatMVR(owed)}{creditLimit != null ? ` · Limit ${formatMVR(creditLimit)} · Available ${formatMVR(available ?? 0)}` : " · No credit limit"}</p>
+                {overLimit && <p className="mt-1 font-medium">This sale would bring the balance to {formatMVR(afterSale ?? 0)}, over the limit. Choose another payment method or reduce the order.</p>}
+              </div>
+            )}
+              </>
             ) : addingCustomer ? (
               <div className="space-y-2 rounded-md border p-3">
                 <div className="flex items-center justify-between">
@@ -264,7 +297,7 @@ export function PaymentDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={processing || !selected || (isCash && insufficientCash) || (isCredit && !customerId)} size="lg">
+          <Button onClick={handleConfirm} disabled={processing || !selected || (isCash && insufficientCash) || (isCredit && !customerId) || overLimit} size="lg">
             {processing && <Loader2 className="h-4 w-4 animate-spin" />}
             Confirm payment
           </Button>
