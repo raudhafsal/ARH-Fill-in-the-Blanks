@@ -77,8 +77,8 @@ function BreakdownPie({ title, empty, data, colorOffset = 0 }: { title: string; 
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col items-center gap-4 sm:flex-row">
-          <div className="h-52 w-full sm:w-1/2">
+        <div className="flex flex-col gap-4">
+          <div className="h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={sorted} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={85} paddingAngle={2} stroke="none">
@@ -90,14 +90,14 @@ function BreakdownPie({ title, empty, data, colorOffset = 0 }: { title: string; 
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <ul className="w-full space-y-1.5 text-sm sm:w-1/2">
+          <ul className="w-full space-y-2 text-sm">
             {sorted.map((d, i) => (
               <li key={d.name} className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: COLORS[(i + colorOffset) % COLORS.length] }} />
-                  <span className="truncate">{d.name}</span>
+                  <span className="font-medium">{d.name}</span>
                 </span>
-                <span className="shrink-0 text-muted-foreground">
+                <span className="shrink-0 whitespace-nowrap text-muted-foreground">
                   {formatMVR(d.value)} · {pct(d.value)}%
                 </span>
               </li>
