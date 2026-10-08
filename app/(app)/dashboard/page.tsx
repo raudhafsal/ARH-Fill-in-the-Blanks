@@ -3,8 +3,9 @@ import { requireProfile } from "@/lib/auth";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { formatMVR } from "@/lib/utils";
+import { BreakdownCharts, type BreakdownData } from "./charts";
 import { maldivesStartOfDay, maldivesEndOfDay, maldivesDayLabel, maldivesStartOfMonth } from "@/lib/maldives-time";
-import { SalesByDayChart, OrdersByDayChart, CategoryPieChart, PaymentMethodChart } from "./charts";
+import { SalesByDayChart, OrdersByDayChart } from "./charts";
 import { BillHistory } from "./bill-history";
 import { DollarSign, ShoppingBag, TrendingUp, Wallet, Package, AlertTriangle, XCircle, Users } from "lucide-react";
 import Link from "next/link";
@@ -31,8 +32,6 @@ export default async function DashboardPage() {
     { count: totalCustomers },
     { data: lowStockProducts },
     { data: recentOrders },
-    { data: recentOrderItems },
-    { data: recentPayments },
     { data: paymentMethods },
   ] = await Promise.all([
     supabase.from("orders").select("id,total,discount_amount,created_at,voided").gte("created_at", todayStart).lte("created_at", todayEnd).eq("voided", false),
@@ -48,16 +47,6 @@ export default async function DashboardPage() {
       .select("id,order_number,created_at,total,status,voided,cashier:profiles!orders_cashier_id_fkey(full_name)")
       .order("created_at", { ascending: false })
       .limit(8),
-    supabase
-      .from("order_items")
-      .select("line_total,created_at,order:orders!inner(voided),product:products(category_id,category:categories(name))")
-      .gte("created_at", weekStart)
-      .eq("order.voided", false),
-    supabase
-      .from("payments")
-      .select("amount,created_at,order:orders!inner(voided),payment_method:payment_methods(name)")
-      .gte("created_at", weekStart)
-      .eq("order.voided", false),
     supabase.from("payment_methods").select("id,name").eq("enabled", true),
   ]);
 
@@ -98,21 +87,25 @@ export default async function DashboardPage() {
     });
   }
 
-  // Sales by category (last 7 days)
-  const categoryTotals = new Map<string, number>();
-  for (const item of recentOrderItems ?? []) {
-    const catName = (item as any).product?.category?.name ?? "Uncategorized";
-    categoryTotals.set(catName, (categoryTotals.get(catName) ?? 0) + Number(item.line_total));
-  }
-  const categoryData = Array.from(categoryTotals.entries()).map(([name, value]) => ({ name, value }));
-
-  // Payment method breakdown (last 7 days)
-  const pmTotals = new Map<string, number>();
-  for (const p of recentPayments ?? []) {
-    const name = (p as any).payment_method?.name ?? "Other";
-    pmTotals.set(name, (pmTotals.get(name) ?? 0) + Number(p.amount));
-  }
-  const pmData = Array.from(pmTotals.entries()).map(([name, value]) => ({ name, value }));
+  // Category + payment breakdowns per period (aggregated in the database)
+  const nowIso = new Date(Date.now() + 60_000).toISOString();
+  const periodRanges: Record<string, [string, string]> = {
+    week: [weekStart, nowIso],
+    month: [monthStart, nowIso],
+    last_month: [lastMonthStart, monthStart],
+    all: ["2000-01-01T00:00:00Z", nowIso],
+  };
+  const breakdown = {} as BreakdownData;
+  await Promise.all(
+    Object.entries(periodRanges).map(async ([key, [from, to]]) => {
+      const { data } = await supabase.rpc("dashboard_breakdown", { p_from: from, p_to: to });
+      const rows = ((data ?? []) as { kind: string; name: string; value: number }[]).map((r) => ({ kind: r.kind, name: r.name, value: Number(r.value) }));
+      breakdown[key as keyof BreakdownData] = {
+        category: rows.filter((r) => r.kind === "category").map(({ name, value }) => ({ name, value })),
+        payment: rows.filter((r) => r.kind === "payment").map(({ name, value }) => ({ name, value })),
+      };
+    })
+  );
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -161,8 +154,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <SalesByDayChart data={byDay} />
           <OrdersByDayChart data={byDay} />
-          <CategoryPieChart data={categoryData} />
-          <PaymentMethodChart data={pmData} />
+          <BreakdownCharts data={breakdown} />
         </div>
 
         <BillHistory

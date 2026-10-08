@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -115,4 +116,46 @@ export function CategoryPieChart({ data }: { data: { name: string; value: number
 
 export function PaymentMethodChart({ data }: { data: { name: string; value: number }[] }) {
   return <BreakdownPie title="Payment method breakdown" empty="No payments yet" data={data} colorOffset={3} />;
+}
+
+export type BreakdownPeriod = "week" | "month" | "last_month" | "all";
+export type BreakdownData = Record<BreakdownPeriod, { category: { name: string; value: number }[]; payment: { name: string; value: number }[] }>;
+
+const PERIODS: { key: BreakdownPeriod; label: string }[] = [
+  { key: "week", label: "Last 7 days" },
+  { key: "month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "all", label: "All time" },
+];
+
+export function BreakdownCharts({ data }: { data: BreakdownData }) {
+  const [period, setPeriod] = useState<BreakdownPeriod>("week");
+  const current = data[period];
+  return (
+    <div className="space-y-3 lg:col-span-2">
+      <div className="flex flex-wrap gap-2">
+        {PERIODS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => setPeriod(p.key)}
+            className={
+              "rounded-full border px-3 py-1 text-sm transition-colors " +
+              (period === p.key ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent")
+            }
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <BreakdownPie
+          title="Sales by category"
+          empty={period === "last_month" || period === "all" ? "No item details for this period (imported Ewity bills have totals only)" : "No sales yet"}
+          data={current.category}
+        />
+        <BreakdownPie title="Payment method breakdown" empty="No payments yet" data={current.payment} colorOffset={3} />
+      </div>
+    </div>
+  );
 }
