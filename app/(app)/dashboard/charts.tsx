@@ -11,7 +11,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMVR } from "@/lib/utils";
@@ -60,64 +59,60 @@ export function OrdersByDayChart({ data }: { data: { day: string; orders: number
   );
 }
 
-export function CategoryPieChart({ data }: { data: { name: string; value: number }[] }) {
+function BreakdownPie({ title, empty, data, colorOffset = 0 }: { title: string; empty: string; data: { name: string; value: number }[]; colorOffset?: number }) {
   if (!data.length) {
     return (
       <Card>
-        <CardHeader><CardTitle className="text-base">Sales by category</CardTitle></CardHeader>
-        <CardContent className="flex h-64 items-center justify-center text-sm text-muted-foreground">No sales yet</CardContent>
+        <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+        <CardContent className="flex h-64 items-center justify-center text-sm text-muted-foreground">{empty}</CardContent>
       </Card>
     );
   }
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const sorted = [...data].sort((a, b) => b.value - a.value);
+  const pct = (v: number) => (total ? Math.round((v / total) * 1000) / 10 : 0);
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Sales by category</CardTitle>
+        <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(e) => e.name}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value: number) => formatMVR(value)} />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+      <CardContent>
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <div className="h-52 w-full sm:w-1/2">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={sorted} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={85} paddingAngle={2} stroke="none">
+                  {sorted.map((_, i) => (
+                    <Cell key={i} fill={COLORS[(i + colorOffset) % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number, name: string) => [`${formatMVR(value)} (${pct(value)}%)`, name]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <ul className="w-full space-y-1.5 text-sm sm:w-1/2">
+            {sorted.map((d, i) => (
+              <li key={d.name} className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: COLORS[(i + colorOffset) % COLORS.length] }} />
+                  <span className="truncate">{d.name}</span>
+                </span>
+                <span className="shrink-0 text-muted-foreground">
+                  {formatMVR(d.value)} · {pct(d.value)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </CardContent>
     </Card>
   );
 }
 
+export function CategoryPieChart({ data }: { data: { name: string; value: number }[] }) {
+  return <BreakdownPie title="Sales by category" empty="No sales yet" data={data} />;
+}
+
 export function PaymentMethodChart({ data }: { data: { name: string; value: number }[] }) {
-  if (!data.length) {
-    return (
-      <Card>
-        <CardHeader><CardTitle className="text-base">Payment method breakdown</CardTitle></CardHeader>
-        <CardContent className="flex h-64 items-center justify-center text-sm text-muted-foreground">No payments yet</CardContent>
-      </Card>
-    );
-  }
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Payment method breakdown</CardTitle>
-      </CardHeader>
-      <CardContent className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(e) => e.name}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={COLORS[(i + 3) % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value: number) => formatMVR(value)} />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
+  return <BreakdownPie title="Payment method breakdown" empty="No payments yet" data={data} colorOffset={3} />;
 }
