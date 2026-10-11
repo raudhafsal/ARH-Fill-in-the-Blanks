@@ -1,7 +1,12 @@
 import type { RegisterSummaryRow } from "@/types/database";
 
 /** Maldivian notes & coins (Rf) a cashier can count, smallest to largest like Ewity's calculator. */
-export const DENOMINATIONS = [1, 2, 5, 10, 20, 50, 100, 500, 1000] as const;
+export const DENOMINATIONS = [0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 500, 1000] as const;
+
+/** Label for a denomination: coins under Rf 1 are shown in laari (25 laari, 50 laari). */
+export function denominationLabel(d: number): string {
+  return d < 1 ? `${Math.round(d * 100)} laari` : `Rf ${d}`;
+}
 
 export type Denominations = Record<string, number>;
 

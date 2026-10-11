@@ -14,7 +14,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { ReconciliationTable, type ReconRow } from "@/components/register/reconciliation-table";
 import { CloseRegisterDialog } from "@/components/register/close-register-dialog";
 import { formatMVR, formatMaldivesDateTime } from "@/lib/utils";
-import { DENOMINATIONS, denominationsTotal, formatDuration } from "@/lib/register";
+import { DENOMINATIONS, denominationLabel, denominationsTotal, formatDuration } from "@/lib/register";
 import type { CashRegister, CashRegisterTransaction, RegisterSummaryRow } from "@/types/database";
 import { ArrowLeft, Lock } from "lucide-react";
 
@@ -34,7 +34,7 @@ function Denoms({ title, value }: { title: string; value: Record<string, number>
     <div className="text-sm">
       <p className="mb-1 font-medium">{title}</p>
       <p className="text-muted-foreground">
-        {DENOMINATIONS.filter((d) => value[String(d)]).map((d) => `Rf ${d} × ${value[String(d)]}`).join(" · ")}
+        {DENOMINATIONS.filter((d) => value[String(d)]).map((d) => `${denominationLabel(d)} × ${value[String(d)]}`).join(" · ")}
         {" = "}
         {formatMVR(denominationsTotal(value))}
       </p>

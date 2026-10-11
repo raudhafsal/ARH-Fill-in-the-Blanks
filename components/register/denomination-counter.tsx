@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatMVR } from "@/lib/utils";
-import { DENOMINATIONS, denominationsTotal, type Denominations } from "@/lib/register";
+import { DENOMINATIONS, denominationLabel, denominationsTotal, type Denominations } from "@/lib/register";
 import { Calculator, ChevronDown, ChevronUp } from "lucide-react";
 
 /**
@@ -59,7 +59,7 @@ export function DenominationCounter({
             const count = value[String(d)] ?? 0;
             return (
               <div key={d} className="grid grid-cols-[1fr_5rem_6rem] items-center gap-2">
-                <span className="text-sm">Rf {d}</span>
+                <span className="text-sm">{denominationLabel(d)}</span>
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -69,7 +69,7 @@ export function DenominationCounter({
                   value={count === 0 ? "" : count}
                   placeholder="0"
                   onChange={(e) => setCount(d, e.target.value)}
-                  aria-label={`Number of Rf ${d}`}
+                  aria-label={`Number of ${denominationLabel(d)}`}
                 />
                 <span className="text-right text-sm tabular-nums">{(d * count).toFixed(2)}</span>
               </div>
