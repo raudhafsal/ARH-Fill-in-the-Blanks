@@ -60,7 +60,7 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/logo-mark.png" alt="" className="h-12 w-12 object-contain" />
             <div>
-              <p className="text-lg font-bold">{businessSettings?.business_name ?? "ARH Fill in the Blank"}</p>
+              <p className="text-lg font-bold">{businessSettings?.business_name ?? "ARH Fill in the Blanks"}</p>
               {businessSettings?.address && <p className="text-xs text-muted-foreground">{businessSettings.address}</p>}
               {businessSettings?.phone && <p className="text-xs text-muted-foreground">{businessSettings.phone}</p>}
             </div>

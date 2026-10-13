@@ -39,7 +39,7 @@ export function Header({ profile }: { profile: Profile }) {
         <img src="/brand/logo-mark.png" alt="" className="hidden h-9 w-9 shrink-0 rounded-lg object-contain md:block" />
 
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight">ARH Fill in the Blank</p>
+          <p className="truncate text-sm font-semibold leading-tight">ARH Fill in the Blanks</p>
           <LiveClock />
         </div>
       </div>

@@ -55,8 +55,8 @@ export default function DownloadPage() {
     <div className="mx-auto min-h-screen max-w-2xl space-y-8 p-6 sm:p-10">
       <div className="flex flex-col items-center gap-3 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/logo-mark.png" alt="ARH Fill in the Blank" className="h-20 w-20 rounded-2xl object-contain" />
-        <h1 className="text-2xl font-bold">Install ARH Fill in the Blank POS</h1>
+        <img src="/brand/logo-mark.png" alt="ARH Fill in the Blanks" className="h-20 w-20 rounded-2xl object-contain" />
+        <h1 className="text-2xl font-bold">Install ARH Fill in the Blanks POS</h1>
         <p className="text-sm text-muted-foreground">
           Add the POS to your phone or computer's home screen for one-tap access, full-screen use, and offline support.
         </p>
@@ -140,7 +140,7 @@ export default function DownloadPage() {
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Look for an install icon (⊕) in the address bar, or open the browser menu and choose "Install ARH Fill in the Blank POS".
+              Look for an install icon (⊕) in the address bar, or open the browser menu and choose "Install ARH Fill in the Blanks POS".
             </p>
           )}
         </CardContent>

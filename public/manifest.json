@@ -1,7 +1,7 @@
 {
-  "name": "ARH Fill in the Blank POS",
+  "name": "ARH Fill in the Blanks POS",
   "short_name": "ARH POS",
-  "description": "Point of Sale system for ARH Fill in the Blank",
+  "description": "Point of Sale system for ARH Fill in the Blanks",
   "start_url": "/pos",
   "display": "standalone",
   "background_color": "#f6f1e7",

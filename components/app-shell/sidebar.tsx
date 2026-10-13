@@ -65,7 +65,7 @@ export function Sidebar({ items }: { items: NavItem[] }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/logo-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-lg object-contain" />
         <div className="leading-tight">
-          <p className="text-sm font-semibold">ARH Fill in the Blank</p>
+          <p className="text-sm font-semibold">ARH Fill in the Blanks</p>
           <p className="text-xs text-muted-foreground">Point of Sale</p>
         </div>
       </div>

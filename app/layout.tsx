@@ -4,8 +4,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "ARH Fill in the Blank POS",
-  description: "Point of Sale system for ARH Fill in the Blank",
+  title: "ARH Fill in the Blanks POS",
+  description: "Point of Sale system for ARH Fill in the Blanks",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

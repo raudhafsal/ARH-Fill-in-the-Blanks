@@ -1,6 +1,6 @@
-# ARH Fill in the Blank POS
+# ARH Fill in the Blanks POS
 
-A Progressive Web App Point of Sale and business-management system for **ARH Fill in the Blank**, a takeaway food & beverage business in the Maldives (currency: **MVR**).
+A Progressive Web App Point of Sale and business-management system for **ARH Fill in the Blanks**, a takeaway food & beverage business in the Maldives (currency: **MVR**).
 
 Built with Next.js (App Router) + TypeScript + Tailwind CSS + shadcn-style UI + Supabase (Postgres, Auth, Storage, RLS, Realtime). No separate backend server — everything runs through `GitHub → Vercel → Supabase`.
 

@@ -59,7 +59,7 @@ export function MiscSettingsTab() {
             <Smartphone className="h-4 w-4" />
             Install the app
           </CardTitle>
-          <CardDescription>Add ARH Fill in the Blank POS to a phone or computer's home screen.</CardDescription>
+          <CardDescription>Add ARH Fill in the Blanks POS to a phone or computer's home screen.</CardDescription>
         </CardHeader>
         <CardContent>
           <Button variant="outline" asChild>
