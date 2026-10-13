@@ -1,0 +1,50 @@
+import type { LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+export function StatCard({
+  label,
+  value,
+  icon: Icon,
+  hint,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  icon?: LucideIcon;
+  hint?: string;
+  tone?: "default" | "warning" | "destructive" | "success";
+}) {
+  const toneClass = {
+    default: "bg-primary/10 text-primary",
+    warning: "bg-warning/10 text-warning",
+    destructive: "bg-destructive/10 text-destructive",
+    success: "bg-success/10 text-success",
+  }[tone];
+
+  return (
+    <Card>
+      <CardContent className="min-w-0 p-4 sm:p-5">
+        <div className="flex items-center gap-2">
+          {Icon && (
+            <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md", toneClass)}>
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+          )}
+          <p className="min-w-0 text-xs font-medium leading-tight text-muted-foreground">{label}</p>
+        </div>
+        <p className="mt-2 whitespace-nowrap text-xl font-semibold leading-tight tabular-nums">
+          {value.startsWith("MVR ") ? (
+            <>
+              <span className="mr-1 text-xs font-medium text-muted-foreground">MVR</span>
+              {value.slice(4)}
+            </>
+          ) : (
+            value
+          )}
+        </p>
+        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
+  );
+}
