@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DateRangePicker } from "@/components/shared/date-range-picker";
 import { StatCard } from "@/components/shared/stat-card";
@@ -19,9 +20,12 @@ import type {
   ProfitEstimate,
   SalesSummary,
 } from "@/lib/reports";
-import { Download, TrendingUp, Package, Tags, CreditCard, Wallet, Boxes, PiggyBank } from "lucide-react";
+import { Download, FileDown, TrendingUp, Package, Tags, CreditCard, Wallet, Boxes, PiggyBank } from "lucide-react";
 
 export function ReportsClient({
+  businessName,
+  preparedBy,
+  signature,
   from,
   to,
   salesSummary,
@@ -30,9 +34,14 @@ export function ReportsClient({
   paymentReport,
   expenseReport,
   expenseTotal,
+  purchaseReport,
+  purchaseTotal,
   inventoryReport,
   profitEstimate,
 }: {
+  businessName: string;
+  preparedBy: { name: string; role: string };
+  signature: string | null;
   from: string;
   to: string;
   salesSummary: SalesSummary;
@@ -41,14 +50,35 @@ export function ReportsClient({
   paymentReport: PaymentReportRow[];
   expenseReport: ExpenseReportRow[];
   expenseTotal: number;
+  purchaseReport: { supplierName: string; count: number; amount: number }[];
+  purchaseTotal: number;
   inventoryReport: { all: InventoryReportRow[]; lowStock: InventoryReportRow[]; outOfStock: InventoryReportRow[]; totalStockValue: number };
   profitEstimate: ProfitEstimate;
 }) {
+  const [tab, setTab] = useState("sales");
+
+  function exportPdf() {
+    const previous = document.title;
+    document.title = `${TAB_LABELS[tab] ?? "Report"} report ${from} to ${to}`;
+    const restore = () => {
+      document.title = previous;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
+  }
+
   return (
     <div>
       <PageHeader
         title="Reports"
-        description="Business performance for the selected date range. Use your browser's Print → Save as PDF to export any report view."
+        description="Business performance for the selected date range."
+        actions={
+          <Button onClick={exportPdf} className="gap-1.5">
+            <FileDown className="h-4 w-4" />
+            Export PDF
+          </Button>
+        }
       />
 
       <div className="space-y-4 p-4 sm:p-6">
@@ -56,8 +86,17 @@ export function ReportsClient({
           <DateRangePicker from={from} to={to} />
         </Card>
 
-        <Tabs defaultValue="sales">
-          <TabsList className="flex-wrap h-auto">
+        <div id="report-print-area" className="space-y-4">
+        <div className="report-print-header hidden">
+          <p className="text-lg font-bold">{businessName}</p>
+          <p className="text-base font-semibold">{TAB_LABELS[tab]} report</p>
+          <p className="text-sm">
+            {formatMaldivesDate(from)} – {formatMaldivesDate(to)}
+          </p>
+        </div>
+
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="no-print flex-wrap h-auto">
             <TabsTrigger value="sales">Sales</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="categories">Categories</TabsTrigger>
@@ -76,7 +115,7 @@ export function ReportsClient({
               <StatCard label="Orders" value={String(salesSummary.orderCount)} />
               <StatCard label="Avg order value" value={formatMVR(salesSummary.avgOrderValue)} />
             </div>
-            <div className="flex justify-end">
+            <div className="no-print flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -122,7 +161,7 @@ export function ReportsClient({
             <p className="text-xs text-muted-foreground">
               Cost and profit are estimates based on each product&apos;s current cost price (not a historical snapshot).
             </p>
-            <div className="flex justify-end">
+            <div className="no-print flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -174,7 +213,7 @@ export function ReportsClient({
           </TabsContent>
 
           <TabsContent value="categories" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="no-print flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -217,7 +256,7 @@ export function ReportsClient({
           </TabsContent>
 
           <TabsContent value="payments" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="no-print flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -260,8 +299,12 @@ export function ReportsClient({
           </TabsContent>
 
           <TabsContent value="expenses" className="space-y-4">
-            <StatCard label="Total expenses" value={formatMVR(expenseTotal)} icon={Wallet} />
-            <div className="flex justify-end">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <StatCard label="Operating expenses" value={formatMVR(expenseTotal)} icon={Wallet} />
+              <StatCard label="Purchases (stock bought)" value={formatMVR(purchaseTotal)} icon={Package} />
+              <StatCard label="Total spending" value={formatMVR(expenseTotal + purchaseTotal)} icon={Wallet} tone="warning" />
+            </div>
+            <div className="no-print flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -278,7 +321,7 @@ export function ReportsClient({
               </Button>
             </div>
             {expenseReport.length === 0 ? (
-              <EmptyState icon={Wallet} title="No expenses in this range" />
+              <EmptyState icon={Wallet} title="No operating expenses in this range" />
             ) : (
               <Card>
                 <Table>
@@ -301,6 +344,31 @@ export function ReportsClient({
                 </Table>
               </Card>
             )}
+            <h3 className="pt-2 text-sm font-semibold text-muted-foreground">Purchases by supplier (received only)</h3>
+            {purchaseReport.length === 0 ? (
+              <EmptyState icon={Package} title="No received purchases in this range" />
+            ) : (
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead className="text-right">Purchases</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {purchaseReport.map((r) => (
+                      <TableRow key={r.supplierName}>
+                        <TableCell className="font-medium">{r.supplierName}</TableCell>
+                        <TableCell className="text-right">{r.count}</TableCell>
+                        <TableCell className="text-right font-medium">{formatMVR(r.amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -312,7 +380,7 @@ export function ReportsClient({
               <StatCard label="Low stock items" value={String(inventoryReport.lowStock.length)} tone="warning" />
               <StatCard label="Out of stock items" value={String(inventoryReport.outOfStock.length)} tone="destructive" />
             </div>
-            <div className="flex justify-end">
+            <div className="no-print flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -385,7 +453,37 @@ export function ReportsClient({
             </div>
           </TabsContent>
         </Tabs>
+
+        <div className="report-print-footer hidden">
+          <div className="mt-10 w-64">
+            <div className="flex h-16 items-end">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {signature && <img src={signature} alt="Signature" className="max-h-16 w-auto" />}
+            </div>
+            <div className="border-t border-black pt-1 text-sm">
+              <p className="font-semibold">{preparedBy.name}</p>
+              <p className="capitalize">{preparedBy.role}</p>
+              <p>Prepared on {formatMaldivesDate(new Date().toISOString())}</p>
+            </div>
+          </div>
+        </div>
+        </div>
+        {!signature && (
+          <p className="no-print text-xs text-muted-foreground">
+            Tip: add your e-signature under Profile and it will be printed at the bottom of exported PDFs.
+          </p>
+        )}
       </div>
     </div>
   );
 }
+
+const TAB_LABELS: Record<string, string> = {
+  sales: "Sales",
+  products: "Products",
+  categories: "Categories",
+  payments: "Payments",
+  expenses: "Expenses & Purchases",
+  inventory: "Inventory",
+  profit: "Profit Estimate",
+};

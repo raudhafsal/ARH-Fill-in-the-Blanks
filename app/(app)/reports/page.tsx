@@ -20,7 +20,7 @@ export default async function ReportsPage({
 }: {
   searchParams: { from?: string; to?: string };
 }) {
-  await requireRole(["administrator", "manager"]);
+  const profile = await requireRole(["administrator", "manager"]);
   const supabase = createClient();
 
   const defaults = thisMonthRange();
@@ -38,6 +38,10 @@ export default async function ReportsPage({
     { data: categoriesRaw },
     { data: paymentMethodsRaw },
     { data: expenseCategoriesRaw },
+    { data: purchasesRaw },
+    { data: suppliersRaw },
+    { data: bizSettings },
+    { data: sigRow },
   ] = await Promise.all([
     supabase.from("orders").select("*").gte("created_at", fromIso).lte("created_at", toIso).order("created_at"),
     supabase.from("refunds").select("*").gte("created_at", fromIso).lte("created_at", toIso),
@@ -47,6 +51,10 @@ export default async function ReportsPage({
     supabase.from("categories").select("*"),
     supabase.from("payment_methods").select("*"),
     supabase.from("expense_categories").select("*"),
+    supabase.from("purchases").select("id,supplier_id,total_cost,purchase_date,status").eq("status", "received").gte("purchase_date", from).lte("purchase_date", to),
+    supabase.from("suppliers").select("id,name"),
+    supabase.from("business_settings").select("business_name").maybeSingle(),
+    supabase.from("user_signatures").select("image_data").eq("user_id", profile.id).maybeSingle(),
   ]);
 
   const orders = (ordersRaw ?? []) as Order[];
@@ -77,11 +85,26 @@ export default async function ReportsPage({
   const paymentReport = buildPaymentReport(payments, paymentMethods);
   const expenseReport = buildExpenseReport(expenses, expenseCategories);
   const expenseTotal = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  // Purchases (stock bought from suppliers) are kept separate from operating expenses.
+  const supplierNames = new Map(((suppliersRaw ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name]));
+  const purchaseMap = new Map<string, { supplierName: string; count: number; amount: number }>();
+  for (const pu of (purchasesRaw ?? []) as { supplier_id: string | null; total_cost: number }[]) {
+    const key = pu.supplier_id ?? "none";
+    const row = purchaseMap.get(key) ?? { supplierName: pu.supplier_id ? supplierNames.get(pu.supplier_id) ?? "Unknown supplier" : "No supplier", count: 0, amount: 0 };
+    row.count += 1;
+    row.amount += Number(pu.total_cost);
+    purchaseMap.set(key, row);
+  }
+  const purchaseReport = Array.from(purchaseMap.values()).sort((a, b) => b.amount - a.amount);
+  const purchaseTotal = purchaseReport.reduce((sum, r) => sum + r.amount, 0);
   const inventoryReport = buildInventoryReport(products);
   const profitEstimate = buildProfitEstimate(salesSummary, productSales, expenseTotal);
 
   return (
     <ReportsClient
+      businessName={bizSettings?.business_name ?? "ARH Fill in the Blanks"}
+      preparedBy={{ name: profile.full_name, role: profile.role }}
+      signature={sigRow?.image_data ?? null}
       from={from}
       to={to}
       salesSummary={salesSummary}
@@ -90,6 +113,8 @@ export default async function ReportsPage({
       paymentReport={paymentReport}
       expenseReport={expenseReport}
       expenseTotal={expenseTotal}
+      purchaseReport={purchaseReport}
+      purchaseTotal={purchaseTotal}
       inventoryReport={inventoryReport}
       profitEstimate={profitEstimate}
     />

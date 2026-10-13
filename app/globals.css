@@ -84,13 +84,16 @@
   #session-print-area,
   #session-print-area *,
   #statement-print-area,
-  #statement-print-area * {
+  #statement-print-area *,
+  #report-print-area,
+  #report-print-area * {
     visibility: visible;
   }
   #receipt-print-area,
   #po-print-area,
   #session-print-area,
-  #statement-print-area {
+  #statement-print-area,
+  #report-print-area {
     position: absolute;
     left: 0;
     top: 0;
@@ -98,6 +101,21 @@
   }
   .no-print {
     display: none !important;
+  }
+  /* Reports: always print dark-on-white, whatever theme is on screen. */
+  #report-print-area,
+  #report-print-area * {
+    color: #111 !important;
+    background: transparent !important;
+    border-color: #bbb !important;
+    box-shadow: none !important;
+  }
+  #report-print-area .report-print-header,
+  #report-print-area .report-print-footer {
+    display: block !important;
+  }
+  #report-print-area tr {
+    break-inside: avoid;
   }
 }
 
