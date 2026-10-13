@@ -117,6 +117,36 @@
   #report-print-area tr {
     break-inside: avoid;
   }
+  /* Ewity-style documents: black left bar title block, light grey table header, thin row lines. */
+  .doc-title-block {
+    border-left: 4px solid #222 !important;
+    padding-left: 10px;
+  }
+  #report-print-area table,
+  #po-print-area table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  #report-print-area thead tr,
+  #po-print-area thead tr {
+    background: #f2f2f2 !important;
+  }
+  #report-print-area th,
+  #po-print-area th {
+    font-weight: 600;
+    padding: 6px 8px;
+    border-bottom: 1px solid #ccc !important;
+  }
+  #report-print-area td,
+  #po-print-area td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #ddd !important;
+  }
+  #report-print-area [class*="rounded"],
+  #po-print-area [class*="rounded"] {
+    border-radius: 0 !important;
+  }
 }
 
 .receipt-58mm {

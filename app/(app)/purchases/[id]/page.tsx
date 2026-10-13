@@ -56,18 +56,21 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
           }
         />
         <div id="po-print-area" className="space-y-4 p-4 sm:p-6">
-          <div className="hidden items-center gap-3 border-b pb-4 print:flex">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/logo-mark.png" alt="" className="h-12 w-12 object-contain" />
-            <div>
-              <p className="text-lg font-bold">{businessSettings?.business_name ?? "ARH Fill in the Blanks"}</p>
-              {businessSettings?.address && <p className="text-xs text-muted-foreground">{businessSettings.address}</p>}
-              {businessSettings?.phone && <p className="text-xs text-muted-foreground">{businessSettings.phone}</p>}
+          <div className="hidden print:block">
+            <div className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/logo-mark.png" alt="" className="h-10 w-10 object-contain" />
+              <div>
+                <p className="text-sm font-semibold">{businessSettings?.business_name ?? "ARH Fill in the Blanks"}</p>
+                {businessSettings?.address && <p className="text-[10px]">{businessSettings.address}</p>}
+                {businessSettings?.phone && <p className="text-[10px]">{businessSettings.phone}</p>}
+              </div>
             </div>
-            <div className="ml-auto text-right text-xs text-muted-foreground">
-              <p className="text-sm font-semibold uppercase tracking-wide">Purchase Order</p>
-              {purchase.supplier?.name && <p>Supplier: {purchase.supplier.name}</p>}
-              {(purchase.supplier as any)?.phone && <p>{(purchase.supplier as any).phone}</p>}
+            <div className="doc-title-block mt-3">
+              <p className="text-xl font-bold">Purchase Order {purchase.invoice_number ?? ""}</p>
+              <p className="text-sm">Date: {formatMaldivesDate(purchase.purchase_date)}</p>
+              <p className="text-sm">Supplier: {purchase.supplier?.name ?? "—"}{(purchase.supplier as any)?.phone ? ` · ${(purchase.supplier as any).phone}` : ""}</p>
+              <p className="text-sm capitalize">Status: {purchase.status}</p>
             </div>
           </div>
           <Card>
@@ -140,6 +143,9 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
               </div>
             </CardContent>
           </Card>
+          <p className="hidden pt-6 text-center text-[10px] print:block">
+            Generated at {formatMaldivesDateTime(new Date().toISOString())}
+          </p>
         </div>
       </div>
     );

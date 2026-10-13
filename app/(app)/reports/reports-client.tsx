@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatMVR, formatMaldivesDate } from "@/lib/utils";
+import { formatMVR, formatMaldivesDate, formatMaldivesDateTime } from "@/lib/utils";
 import { downloadCsv } from "@/lib/csv-export";
 import type {
   CategorySalesRow,
@@ -56,6 +56,10 @@ export function ReportsClient({
   profitEstimate: ProfitEstimate;
 }) {
   const [tab, setTab] = useState("sales");
+  const spendingRows = [
+    ...expenseReport.map((e) => ({ type: "Expense", name: e.categoryName, count: e.count, amount: e.amount })),
+    ...purchaseReport.map((r) => ({ type: "Purchase", name: r.supplierName, count: r.count, amount: r.amount })),
+  ];
 
   function exportPdf() {
     const previous = document.title;
@@ -88,11 +92,18 @@ export function ReportsClient({
 
         <div id="report-print-area" className="space-y-4">
         <div className="report-print-header hidden">
-          <p className="text-lg font-bold">{businessName}</p>
-          <p className="text-base font-semibold">{TAB_LABELS[tab]} report</p>
-          <p className="text-sm">
-            {formatMaldivesDate(from)} – {formatMaldivesDate(to)}
-          </p>
+          <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-mark.png" alt="" className="h-10 w-10 object-contain" />
+            <p className="text-sm font-semibold">{businessName}</p>
+          </div>
+          <div className="doc-title-block mt-3">
+            <p className="text-xl font-bold">{TAB_LABELS[tab]} Report</p>
+            <p className="text-sm">
+              From {formatMaldivesDate(from)} to {formatMaldivesDate(to)}
+            </p>
+            <p className="text-sm">For {businessName}</p>
+          </div>
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
@@ -107,7 +118,7 @@ export function ReportsClient({
           </TabsList>
 
           <TabsContent value="sales" className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
               <StatCard label="Gross sales" value={formatMVR(salesSummary.grossSales)} icon={TrendingUp} />
               <StatCard label="Discounts" value={formatMVR(salesSummary.discounts)} />
               <StatCard label="Refunds" value={formatMVR(salesSummary.refunds)} />
@@ -309,8 +320,9 @@ export function ReportsClient({
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  downloadCsv(`expense-report-${from}-to-${to}`, expenseReport, [
-                    { header: "Category", accessor: (r) => r.categoryName },
+                  downloadCsv(`expenses-and-purchases-${from}-to-${to}`, spendingRows, [
+                    { header: "Type", accessor: (r) => r.type },
+                    { header: "Name", accessor: (r) => r.name },
                     { header: "Count", accessor: (r) => r.count },
                     { header: "Amount", accessor: (r) => r.amount.toFixed(2) },
                   ])
@@ -320,55 +332,41 @@ export function ReportsClient({
                 Export CSV
               </Button>
             </div>
-            {expenseReport.length === 0 ? (
-              <EmptyState icon={Wallet} title="No operating expenses in this range" />
+            {spendingRows.length === 0 ? (
+              <EmptyState icon={Wallet} title="No expenses or received purchases in this range" />
             ) : (
               <Card>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Category</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Name</TableHead>
                       <TableHead className="text-right">Count</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenseReport.map((e) => (
-                      <TableRow key={e.categoryId}>
-                        <TableCell className="font-medium">{e.categoryName}</TableCell>
-                        <TableCell className="text-right">{e.count}</TableCell>
-                        <TableCell className="text-right font-medium">{formatMVR(e.amount)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-            )}
-            <h3 className="pt-2 text-sm font-semibold text-muted-foreground">Purchases by supplier (received only)</h3>
-            {purchaseReport.length === 0 ? (
-              <EmptyState icon={Package} title="No received purchases in this range" />
-            ) : (
-              <Card>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Supplier</TableHead>
-                      <TableHead className="text-right">Purchases</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {purchaseReport.map((r) => (
-                      <TableRow key={r.supplierName}>
-                        <TableCell className="font-medium">{r.supplierName}</TableCell>
+                    {spendingRows.map((r) => (
+                      <TableRow key={r.type + r.name}>
+                        <TableCell>{r.type}</TableCell>
+                        <TableCell className="font-medium">{r.name}</TableCell>
                         <TableCell className="text-right">{r.count}</TableCell>
                         <TableCell className="text-right font-medium">{formatMVR(r.amount)}</TableCell>
                       </TableRow>
                     ))}
+                    <TableRow>
+                      <TableCell colSpan={3} className="font-semibold">
+                        Total
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">{formatMVR(expenseTotal + purchaseTotal)}</TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               </Card>
             )}
+            <p className="no-print text-xs text-muted-foreground">
+              Purchases count once they are marked received, by purchase date. Draft and cancelled purchases are not included.
+            </p>
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -463,9 +461,11 @@ export function ReportsClient({
             <div className="border-t border-black pt-1 text-sm">
               <p className="font-semibold">{preparedBy.name}</p>
               <p className="capitalize">{preparedBy.role}</p>
-              <p>Prepared on {formatMaldivesDate(new Date().toISOString())}</p>
             </div>
           </div>
+          <p className="mt-6 text-center text-[10px]">
+            Generated at {formatMaldivesDateTime(new Date().toISOString())} by {preparedBy.name}
+          </p>
         </div>
         </div>
         {!signature && (
