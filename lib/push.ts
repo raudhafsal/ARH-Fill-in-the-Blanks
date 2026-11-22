@@ -15,12 +15,38 @@ export function pushSupported(): boolean {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+/** The app's service worker, registering it if the page hasn't yet, and waiting until it is active. */
+async function getRegistration(): Promise<ServiceWorkerRegistration> {
+  let reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) reg = await navigator.serviceWorker.register("/sw.js");
+  if (!reg.active) {
+    reg = await withTimeout(navigator.serviceWorker.ready, 10000, "The app's background service isn't ready yet. Refresh the page and try again.");
+  }
+  return reg;
+}
+
 export async function getPushState(): Promise<PushState> {
   if (!pushSupported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
   try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    const sub = await reg?.pushManager.getSubscription();
+    const reg = await withTimeout(navigator.serviceWorker.ready, 4000, "not ready");
+    const sub = await reg.pushManager.getSubscription();
     return sub && Notification.permission === "granted" ? "on" : "off";
   } catch {
     return "off";
@@ -32,7 +58,7 @@ export async function enablePush(userId: string): Promise<PushState> {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return permission === "denied" ? "denied" : "off";
 
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await getRegistration();
   const sub =
     (await reg.pushManager.getSubscription()) ??
     (await reg.pushManager.subscribe({

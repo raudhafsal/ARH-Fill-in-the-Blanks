@@ -44,8 +44,23 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
-    getPushState().then(setPushState);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      let state = await getPushState();
+      // Permission already granted but this device isn't subscribed (or its row is missing): finish the setup quietly.
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && state !== "unsupported") {
+        try {
+          state = await enablePush(userId);
+        } catch {
+          /* leave the button so it can be retried */
+        }
+      }
+      if (!cancelled) setPushState(state);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   async function togglePush() {
     setPushBusy(true);
@@ -54,8 +69,8 @@ export function NotificationBell({ userId }: { userId: string }) {
       setPushState(next);
       if (next === "on") toast.success("Push notifications are on for this device.");
       else if (next === "denied") toast.error("Notifications are blocked. Allow them in your browser or phone settings.");
-    } catch {
-      toast.error("Couldn't change push notifications. Please try again.");
+    } catch (e) {
+      toast.error(`Couldn't change push notifications: ${e instanceof Error ? e.message : "unknown error"}`);
     } finally {
       setPushBusy(false);
     }
