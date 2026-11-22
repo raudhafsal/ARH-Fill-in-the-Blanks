@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X, Ruler, Layers, Star, FileUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Loader2, Search, ArrowUpDown, ChefHat, X, Ruler, Layers, Star, FileUp, ChevronRight, ChevronDown } from "lucide-react";
 import { CsvImportDialog } from "./csv-import-dialog";
 import { toast } from "sonner";
 import { cn, formatMVR } from "@/lib/utils";
@@ -158,6 +158,7 @@ export function ProductsClient({
   const [unitsLoading, setUnitsLoading] = useState(false);
 
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: "" });
@@ -516,6 +517,41 @@ export function ProductsClient({
     return sorted;
   }, [products, debouncedSearch, categoryFilter, statusFilter, sortKey, sortDir]);
 
+  /** Variant products (e.g. each Ice Corn flavour) are collapsed under one row named after their
+   *  group; open it to see/edit every flavour with its own stock. A group stays open while a search
+   *  is active so matches are visible. */
+  const tableRows = useMemo(() => {
+    type Row =
+      | { type: "group"; groupId: string; items: Product[] }
+      | { type: "item"; product: Product; child: boolean };
+    const rows: Row[] = [];
+    const seen = new Set<string>();
+    const searching = debouncedSearch.trim().length > 0;
+    for (const p of filtered) {
+      if (!p.variant_group_id) {
+        rows.push({ type: "item", product: p, child: false });
+        continue;
+      }
+      if (seen.has(p.variant_group_id)) continue;
+      seen.add(p.variant_group_id);
+      const items = filtered.filter((x) => x.variant_group_id === p.variant_group_id);
+      rows.push({ type: "group", groupId: p.variant_group_id, items });
+      if (searching || expandedGroups.has(p.variant_group_id)) {
+        items.forEach((item) => rows.push({ type: "item", product: item, child: true }));
+      }
+    }
+    return rows;
+  }, [filtered, expandedGroups, debouncedSearch]);
+
+  function toggleGroup(id: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div>
       <PageHeader
@@ -607,9 +643,53 @@ export function ProductsClient({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((product) => (
+                {tableRows.map((row) => {
+                  if (row.type === "group") {
+                    const first = row.items[0];
+                    const open = expandedGroups.has(row.groupId) || debouncedSearch.trim().length > 0;
+                    const prices = row.items.map((i) => i.selling_price);
+                    const minP = Math.min(...prices);
+                    const maxP = Math.max(...prices);
+                    const totalStock = row.items.reduce((sum, i) => sum + Number(i.current_stock), 0);
+                    return (
+                      <TableRow key={`group-${row.groupId}`} className="cursor-pointer bg-muted/30" onClick={() => toggleGroup(row.groupId)}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border bg-muted">
+                              {first.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={first.image_url} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                  <Layers className="h-4 w-4" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{variantGroupMap.get(row.groupId) ?? "Group"}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {row.items.length} variant{row.items.length === 1 ? "" : "s"}, separate stock each
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {first.category_id ? categoryMap.get(first.category_id) ?? "—" : "—"}
+                        </TableCell>
+                        <TableCell>{minP === maxP ? formatMVR(minP) : `${formatMVR(minP)} – ${formatMVR(maxP)}`}</TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground">{totalStock} total</span>
+                        </TableCell>
+                        <TableCell />
+                        <TableCell />
+                      </TableRow>
+                    );
+                  }
+                  const product = row.product;
+                  return (
                   <TableRow key={product.id}>
-                    <TableCell>
+                    <TableCell className={row.child ? "pl-12" : undefined}>
                       <button className="flex items-center gap-2 text-left" onClick={() => toggleSort("name")}>
                         <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border bg-muted">
                           {product.image_url ? (
@@ -683,7 +763,8 @@ export function ProductsClient({
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
