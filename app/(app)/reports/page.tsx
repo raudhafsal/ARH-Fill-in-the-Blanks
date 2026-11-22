@@ -15,6 +15,21 @@ import { ReportsClient } from "./reports-client";
 
 export const dynamic = "force-dynamic";
 
+/** Supabase returns at most 1000 rows per request, so page through the results until a short page. */
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null }>
+): Promise<{ data: T[] }> {
+  const size = 1000;
+  const all: T[] = [];
+  for (let from = 0; ; from += size) {
+    const { data } = await page(from, from + size - 1);
+    const rows = (data ?? []) as T[];
+    all.push(...rows);
+    if (rows.length < size) break;
+  }
+  return { data: all };
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -43,9 +58,15 @@ export default async function ReportsPage({
     { data: bizSettings },
     { data: sigRow },
   ] = await Promise.all([
-    supabase.from("orders").select("*").gte("created_at", fromIso).lte("created_at", toIso).order("created_at"),
-    supabase.from("refunds").select("*").gte("created_at", fromIso).lte("created_at", toIso),
-    supabase.from("payments").select("*").gte("created_at", fromIso).lte("created_at", toIso),
+    fetchAllRows<Order>((f, t) =>
+      supabase.from("orders").select("*").gte("created_at", fromIso).lte("created_at", toIso).order("created_at").order("id").range(f, t)
+    ),
+    fetchAllRows<Refund>((f, t) =>
+      supabase.from("refunds").select("*").gte("created_at", fromIso).lte("created_at", toIso).order("created_at").order("id").range(f, t)
+    ),
+    fetchAllRows<Payment>((f, t) =>
+      supabase.from("payments").select("*").gte("created_at", fromIso).lte("created_at", toIso).order("created_at").order("id").range(f, t)
+    ),
     supabase.from("expenses").select("*").gte("expense_date", from).lte("expense_date", to),
     supabase.from("products").select("*"),
     supabase.from("categories").select("*"),
@@ -61,10 +82,17 @@ export default async function ReportsPage({
   const validOrders = orders.filter((o) => !o.voided && o.status !== "cancelled");
   const orderIds = validOrders.map((o) => o.id);
 
-  const { data: orderItemsRaw } =
-    orderIds.length > 0
-      ? await supabase.from("order_items").select("*").in("order_id", orderIds)
-      : { data: [] as OrderItem[] };
+  // Fetch line items in small batches: one .in() with hundreds of ids makes the request URL too long
+  // (the whole query silently fails), and a single response is capped at 1000 rows.
+  const orderItemsRaw: OrderItem[] = [];
+  for (let i = 0; i < orderIds.length; i += 100) {
+    const chunk = orderIds.slice(i, i + 100);
+    orderItemsRaw.push(
+      ...(await fetchAllRows<OrderItem>((f, t) =>
+        supabase.from("order_items").select("*").in("order_id", chunk).order("id").range(f, t)
+      )).data
+    );
+  }
 
   const refunds = (refundsRaw ?? []) as Refund[];
   // Only payments of orders that count (not voided/cancelled) — otherwise voided sales inflate the totals.
@@ -75,7 +103,7 @@ export default async function ReportsPage({
   const categories = (categoriesRaw ?? []) as Category[];
   const paymentMethods = (paymentMethodsRaw ?? []) as PaymentMethod[];
   const expenseCategories = (expenseCategoriesRaw ?? []) as ExpenseCategory[];
-  const orderItems = (orderItemsRaw ?? []) as OrderItem[];
+  const orderItems = orderItemsRaw;
 
   const categoryNames = new Map(categories.map((c) => [c.id, c.name]));
 
