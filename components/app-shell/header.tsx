@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LiveClock } from "./live-clock";
+import { NotificationBell } from "./notification-bell";
 import { OfflineIndicator } from "./offline-indicator";
 import { useTheme } from "@/components/theme-provider";
 import { Moon, Sun, Monitor, LogOut, User, KeyRound } from "lucide-react";
@@ -47,6 +48,7 @@ export function Header({ profile }: { profile: Profile }) {
       <div className="flex items-center gap-3">
         <OfflineIndicator />
         <Badge variant="outline" className="hidden sm:inline-flex">{roleLabel}</Badge>
+        {(profile.role === "administrator" || profile.role === "manager") && <NotificationBell userId={profile.id} />}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
