@@ -12,9 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, Ban, RotateCcw, PackageX, CreditCard, Wallet, CheckCheck, ShieldAlert } from "lucide-react";
+import { Bell, BellRing, BellOff, Ban, RotateCcw, PackageX, CreditCard, Wallet, CheckCheck, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { formatMaldivesDateTime } from "@/lib/utils";
+import { enablePush, disablePush, getPushState, type PushState } from "@/lib/push";
 
 interface NotificationRow {
   id: string;
@@ -39,6 +40,26 @@ export function NotificationBell({ userId }: { userId: string }) {
   const router = useRouter();
   const supabase = useRef(createClient()).current;
   const [items, setItems] = useState<NotificationRow[]>([]);
+  const [pushState, setPushState] = useState<PushState>("off");
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    getPushState().then(setPushState);
+  }, []);
+
+  async function togglePush() {
+    setPushBusy(true);
+    try {
+      const next = pushState === "on" ? await disablePush() : await enablePush(userId);
+      setPushState(next);
+      if (next === "on") toast.success("Push notifications are on for this device.");
+      else if (next === "denied") toast.error("Notifications are blocked. Allow them in your browser or phone settings.");
+    } catch {
+      toast.error("Couldn't change push notifications. Please try again.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const isUnread = useCallback((n: NotificationRow) => !(n.read_by ?? []).includes(userId), [userId]);
 
@@ -129,6 +150,28 @@ export function NotificationBell({ userId }: { userId: string }) {
                 </DropdownMenuItem>
               );
             })
+          )}
+        </div>
+        <DropdownMenuSeparator className="my-0" />
+        <div className="px-3 py-2">
+          {pushState === "unsupported" ? (
+            <p className="text-xs text-muted-foreground">
+              Push alerts aren&apos;t available here. On iPhone, add the POS to your Home Screen first, then open it from there.
+            </p>
+          ) : pushState === "denied" ? (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <BellOff className="h-3.5 w-3.5" /> Notifications are blocked for this site. Allow them in your browser or phone settings.
+            </p>
+          ) : (
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={togglePush}
+              className="flex w-full items-center gap-2 text-left text-xs font-medium text-primary hover:underline disabled:opacity-50"
+            >
+              {pushState === "on" ? <BellOff className="h-3.5 w-3.5" /> : <BellRing className="h-3.5 w-3.5" />}
+              {pushState === "on" ? "Turn off push alerts on this device" : "Turn on push alerts on this device"}
+            </button>
           )}
         </div>
       </DropdownMenuContent>
