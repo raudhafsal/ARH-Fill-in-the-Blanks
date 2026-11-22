@@ -31,13 +31,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-/** The app's service worker, registering it if the page hasn't yet, and waiting until it is active. */
+const PUSH_SW_URL = "/push-sw/sw.js";
+const PUSH_SW_SCOPE = "/push-sw/";
+
+/** A small dedicated service worker just for push, registered on its own scope so it can't clash with the offline cache worker. */
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
-  let reg = await navigator.serviceWorker.getRegistration();
-  if (!reg) reg = await navigator.serviceWorker.register("/sw.js");
-  if (!reg.active) {
-    reg = await withTimeout(navigator.serviceWorker.ready, 10000, "The app's background service isn't ready yet. Refresh the page and try again.");
-  }
+  const reg = await navigator.serviceWorker.register(PUSH_SW_URL, { scope: PUSH_SW_SCOPE });
+  if (reg.active) return reg;
+  const worker = reg.installing ?? reg.waiting;
+  if (!worker) throw new Error("The push service worker didn't start.");
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      const check = () => {
+        if (worker.state === "activated") resolve();
+        else if (worker.state === "redundant") reject(new Error("The push service worker failed to install."));
+      };
+      worker.addEventListener("statechange", check);
+      check();
+    }),
+    10000,
+    "The push service worker took too long to start. Refresh the page and try again."
+  );
   return reg;
 }
 
@@ -45,8 +59,8 @@ export async function getPushState(): Promise<PushState> {
   if (!pushSupported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
   try {
-    const reg = await withTimeout(navigator.serviceWorker.ready, 4000, "not ready");
-    const sub = await reg.pushManager.getSubscription();
+    const reg = await navigator.serviceWorker.getRegistration(PUSH_SW_SCOPE);
+    const sub = await reg?.pushManager.getSubscription();
     return sub && Notification.permission === "granted" ? "on" : "off";
   } catch {
     return "off";
@@ -82,7 +96,7 @@ export async function enablePush(userId: string): Promise<PushState> {
 }
 
 export async function disablePush(): Promise<PushState> {
-  const reg = await navigator.serviceWorker.getRegistration();
+  const reg = await navigator.serviceWorker.getRegistration(PUSH_SW_SCOPE);
   const sub = await reg?.pushManager.getSubscription();
   if (sub) {
     const supabase = createClient();

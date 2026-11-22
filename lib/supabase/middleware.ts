@@ -43,6 +43,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/favicon") ||
     request.nextUrl.pathname.startsWith("/apple-touch-icon") ||
     request.nextUrl.pathname.startsWith("/sw.js") ||
+    request.nextUrl.pathname.startsWith("/push-sw/") ||
+    request.nextUrl.pathname.startsWith("/worker-") ||
     request.nextUrl.pathname.startsWith("/download");
 
   if (!user && !isAuthRoute && !isPublicAsset) {
