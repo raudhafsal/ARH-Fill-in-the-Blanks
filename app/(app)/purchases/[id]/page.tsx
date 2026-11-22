@@ -12,6 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { ArrowLeft } from "lucide-react";
 import { formatMVR, formatMaldivesDate, formatMaldivesDateTime } from "@/lib/utils";
 import { PrintButton } from "@/components/shared/print-button";
+import { ExportPdfButton } from "@/components/shared/export-pdf-button";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,8 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
           description={formatMaldivesDate(purchase.purchase_date)}
           actions={
             <div className="flex gap-2">
-              <PrintButton label="Print purchase order" />
+              <ExportPdfButton fileName={`Purchase Order ${purchase.invoice_number ?? ""} - ${purchase.supplier?.name ?? ""}`.replace(/\s+/g, " ").trim()} />
+              <PrintButton label="Print" />
               <Button variant="outline" asChild className="no-print">
                 <Link href="/purchases">
                   <ArrowLeft className="h-4 w-4" />

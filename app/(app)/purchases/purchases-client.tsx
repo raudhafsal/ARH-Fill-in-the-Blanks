@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Truck, Plus, Check, X, Loader2 } from "lucide-react";
+import { Truck, Plus, Check, X, Loader2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { formatMVR, formatMaldivesDate } from "@/lib/utils";
 
@@ -135,13 +135,9 @@ export function PurchasesClient({ initialPurchases }: { initialPurchases: Purcha
                     <TableRow key={p.id}>
                       <TableCell className="whitespace-nowrap text-sm">{formatMaldivesDate(p.purchase_date)}</TableCell>
                       <TableCell>
-                        {p.status === "draft" ? (
-                          <Link href={`/purchases/${p.id}`} className="font-medium hover:underline">
-                            {p.supplier?.name ?? "—"}
-                          </Link>
-                        ) : (
-                          p.supplier?.name ?? "—"
-                        )}
+                        <Link href={`/purchases/${p.id}`} className="font-medium hover:underline">
+                          {p.supplier?.name ?? "—"}
+                        </Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{p.invoice_number ?? "—"}</TableCell>
                       <TableCell>
@@ -169,8 +165,15 @@ export function PurchasesClient({ initialPurchases }: { initialPurchases: Purcha
                       </TableCell>
                       <TableCell className="text-right font-medium">{formatMVR(p.total_cost)}</TableCell>
                       <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/purchases/${p.id}`}>
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                            </Link>
+                          </Button>
                         {p.status === "draft" && (
-                          <div className="flex justify-end gap-1">
+                          <>
                             <Button
                               variant="outline"
                               size="sm"
@@ -189,8 +192,9 @@ export function PurchasesClient({ initialPurchases }: { initialPurchases: Purcha
                               <X className="h-3.5 w-3.5" />
                               Cancel
                             </Button>
-                          </div>
+                          </>
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
