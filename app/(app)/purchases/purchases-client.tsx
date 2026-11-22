@@ -121,9 +121,10 @@ export function PurchasesClient({ initialPurchases }: { initialPurchases: Purcha
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>PO No.</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Supplier</TableHead>
-                    <TableHead>Invoice</TableHead>
+                    <TableHead>Supplier invoice</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment</TableHead>
                     <TableHead className="text-right">Total</TableHead>
@@ -133,6 +134,7 @@ export function PurchasesClient({ initialPurchases }: { initialPurchases: Purcha
                 <TableBody>
                   {purchases.map((p) => (
                     <TableRow key={p.id}>
+                      <TableCell className="whitespace-nowrap text-sm font-medium">{p.po_number}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm">{formatMaldivesDate(p.purchase_date)}</TableCell>
                       <TableCell>
                         <Link href={`/purchases/${p.id}`} className="font-medium hover:underline">

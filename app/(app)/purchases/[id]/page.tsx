@@ -42,11 +42,11 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
     return (
       <div>
         <PageHeader
-          title={`Purchase — ${purchase.supplier?.name ?? "Unknown supplier"}`}
+          title={`${purchase.po_number} — ${purchase.supplier?.name ?? "Unknown supplier"}`}
           description={formatMaldivesDate(purchase.purchase_date)}
           actions={
             <div className="flex gap-2">
-              <ExportPdfButton fileName={`Purchase Order ${purchase.invoice_number ?? ""} - ${purchase.supplier?.name ?? ""}`.replace(/\s+/g, " ").trim()} />
+              <ExportPdfButton fileName={`Purchase Order ${purchase.po_number} - ${purchase.supplier?.name ?? ""}`.replace(/\s+/g, " ").trim()} />
               <PrintButton label="Print" />
               <Button variant="outline" asChild className="no-print">
                 <Link href="/purchases">
@@ -69,7 +69,7 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
               </div>
             </div>
             <div className="doc-title-block mt-3">
-              <p className="text-xl font-bold">Purchase Order {purchase.invoice_number ?? ""}</p>
+              <p className="text-xl font-bold">Purchase Order {purchase.po_number}</p>
               <p className="text-sm">Date: {formatMaldivesDate(purchase.purchase_date)}</p>
               <p className="text-sm">Supplier: {purchase.supplier?.name ?? "—"}{(purchase.supplier as any)?.phone ? ` · ${(purchase.supplier as any).phone}` : ""}</p>
               <p className="text-sm capitalize">Status: {purchase.status}</p>
@@ -84,7 +84,11 @@ export default async function PurchaseDetailPage({ params }: { params: { id: str
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
               <p>
-                <span className="text-muted-foreground">Invoice: </span>
+                <span className="text-muted-foreground">PO number: </span>
+                {purchase.po_number}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Supplier invoice: </span>
                 {purchase.invoice_number ?? "—"}
               </p>
               <p>

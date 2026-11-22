@@ -344,8 +344,14 @@ export function PurchaseForm({
               </div>
               {errors.supplier_id && <p className="text-sm text-destructive">{errors.supplier_id}</p>}
             </div>
+            {existingPurchase?.po_number && (
+              <div className="space-y-2">
+                <Label>PO number</Label>
+                <Input value={existingPurchase.po_number} readOnly disabled />
+              </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="inv-num">Invoice number</Label>
+              <Label htmlFor="inv-num">Supplier invoice number</Label>
               <Input id="inv-num" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
             </div>
             <div className="space-y-2">

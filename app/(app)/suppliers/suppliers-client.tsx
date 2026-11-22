@@ -289,7 +289,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Invoice</TableHead>
+                    <TableHead>PO No.</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                   </TableRow>
@@ -298,7 +298,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                   {historyPurchases.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="text-sm">{formatMaldivesDate(p.purchase_date)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{p.invoice_number ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.po_number}</TableCell>
                       <TableCell>
                         <Badge variant={statusVariant[p.status]} className="capitalize">
                           {p.status}

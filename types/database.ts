@@ -229,6 +229,7 @@ export interface InventoryTransaction {
 export interface Purchase {
   id: string;
   supplier_id: string | null;
+  po_number: string;
   invoice_number: string | null;
   purchase_date: string;
   status: PurchaseStatus;
